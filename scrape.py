@@ -1,7 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 import evaluate
-
+import json, html, re
 
 locations = [
     "remote",  
@@ -79,42 +79,74 @@ def extract_job_urls(soups):
 
     return list(job_urls)
 
-def extract_job_description(job_soup):
-    """Extract job description using multiple possible selectors"""
-    description = None
+def strip_html_tags(raw: str) -> str:
+    return BeautifulSoup(raw, "html.parser").get_text(" ", strip=True)
+
+def clean_description(raw_html: str) -> str:
+    """
+    Thoroughly clean job description HTML:
+    1. Decode HTML entities
+    2. Remove nested HTML tags
+    3. Convert list items to readable format
+    4. Remove excessive whitespace
+    5. Strip leading/trailing whitespace
+    """
+    # First, decode HTML entities
+    decoded = html.unescape(raw_html)
     
-    # List of possible selectors for job descriptions
-    description_selectors = [
-        ('div', {'class_': 'description__text'}),
-        ('div', {'class_': 'show-more-less-html__markup'}),
-        ('div', {'class_': 'job-description'}),
-        ('div', {'class_': 'jobs-description__content'}),
-        ('div', {'class_': 'jobs-box__html-content'}),
-        ('section', {'class_': 'description'}),
-        ('div', {'class_': 'jobs-description'}),
-        ('div', {'class_': 'jobs-unified-description__content'}),
-        ('div', {'class_': 'jobs-description-content'}),
-        ('div', {'id': 'job-details'}),
-        ('div', {'class_': lambda x: x and 'description' in x.lower() if x else False}),
-        ('div', {'class_': lambda x: x and 'job-details' in x.lower() if x else False})
+    # Remove nested tags, keeping their text content
+    def strip_tags(text):
+        return re.sub('<[^<]+?>', '', text)
+    
+    # Remove all HTML tags
+    no_tags = strip_tags(decoded)
+    
+    # Replace multiple newlines/spaces with single space
+    cleaned = re.sub(r'\s+', ' ', no_tags)
+    
+    # Optional: Convert list-like structures to more readable format
+    cleaned = re.sub(r'\s*•\s*', '\n• ', cleaned)
+    cleaned = re.sub(r'\s*-\s*', '\n- ', cleaned)
+    
+    # Remove common LinkedIn boilerplate
+    boilerplate_patterns = [
+        r'Pay Range:.*',
+        r'The specific compensation.*',
+        r'Full job description.*',
+        r'About the job.*'
     ]
+    for pattern in boilerplate_patterns:
+        cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE)
     
-    for tag, attrs in description_selectors:
-        element = job_soup.find(tag, attrs)
-        if element:
-            description = element.get_text(separator=' ', strip=True)
-            if description:
-                return description
-            
-            description = ' '.join([p.get_text(strip=True) for p in element.find_all(['p', 'li'])])
-            if description:
-                return description
-    
-    job_details = job_soup.find_all(['div', 'section'], class_=lambda x: x and any(keyword in x.lower() for keyword in ['job', 'description', 'details']) if x else False)
-    for element in job_details:
-        description = element.get_text(separator=' ', strip=True)
-        if description and len(description) > 100:
-            return description
+    return cleaned.strip()
+
+def extract_job_description(job_soup):
+    # 1) look for ld+json
+    for script in job_soup.find_all("script", type="application/ld+json"):
+        try:
+            data = json.loads(script.string)
+        except Exception:
+            continue
+        if isinstance(data, dict) and "description" in data:
+            return clean_description(data["description"])
+
+    # 2) fallback to decoratedJobPosting = {...};
+    pattern = re.compile(r"decoratedJobPosting\":({.*?})},\"applyMethod",
+                         re.DOTALL)
+    m = pattern.search(job_soup.text)
+    if m:
+        data = json.loads(m.group(1))
+        if "description" in data:
+            return clean_description(data["description"])
+
+    # 3) last-chance: try the old div selectors (for logged-in HTML)
+    container = job_soup.find(id="job-details") or \
+                job_soup.find("div",
+                    class_=lambda c: c and "jobs-description__content" in c)
+    if container:
+        return clean_description(container.decode_contents())
+
+    return None
 
 def extract_job_title(job_soup):
     """Try several possible selectors / patterns to obtain the job title text from a LinkedIn job page."""
@@ -160,6 +192,9 @@ def get_jobs():
             seen.add(url)
             unique_urls.append(url)
     return unique_urls
+
+
+
 
 def get_job_data(urls):
 
