@@ -9,9 +9,6 @@ exclusions = [
 
 
 def contains_exclusions(title):
-    """Check if the job title contains an excluded term"""
-    if any(re.search(rf"\b{re.escape(word)}\b", title, re.I)
-            for word in exclusions):
-        return True
-    return False
+    return any(re.search(rf"(?<!\w){re.escape(word)}(?!\w)", title, re.I)
+               for word in exclusions)
 

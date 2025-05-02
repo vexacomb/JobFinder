@@ -13,10 +13,7 @@ def main():
     failed_on_exclusion_keyword = 0
 
     for job in jobs:
-        job_data = scrape.get_job_data(job["url"])
-        if job_data is None:
-            failed_to_fetch += 1
-            continue
+        job_data = scrape.get_job_data(job)
         
         if job_data["failed_to_fetch"]:
             failed_to_fetch += 1

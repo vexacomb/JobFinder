@@ -51,6 +51,9 @@ def extract_job_urls(soups):
     job_urls = set()
     for soup in soups:
         for a in soup.find_all("a", href=True):
+            text = a.get_text(" ", strip=True)
+            if evaluate.contains_exclusions(text):
+                continue
             href = a["href"]
             if "/jobs/view/" in href:
                 if href.startswith("/"):
@@ -172,10 +175,11 @@ def get_jobs():
             unique_jobs.append(job)
     return unique_jobs
 
-def get_job_data(url):
+def get_job_data(job):
+    url = job["url"]
+    location = job["location"]
+    keyword = job["keyword"]
     job_soup = get_soup(url)
-    location = ""
-    keyword = ""
     title = ""
     description = ""
     failed_to_fetch = False
