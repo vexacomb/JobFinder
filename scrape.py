@@ -2,11 +2,14 @@ import requests
 from bs4 import BeautifulSoup
 import evaluate
 import json, html, re
+from urllib.parse import urlparse, parse_qs
 from config import load
 
 config = load()
 locations = config["locations"]
 keywords = config["keywords"]
+
+_JOB_ID_RE = re.compile(r"/jobs/view/(?:[^/?]*-)?(\d+)(?:[/?]|$)")
 
 def get_searches():
     searches = []
@@ -50,10 +53,13 @@ def extract_job_urls(soups):
             if evaluate.contains_exclusions(text):
                 continue
             href = a["href"]
-            if "/jobs/view/" in href:
-                if href.startswith("/"):
-                    href = "https://www.linkedin.com" + href
-                job_urls.add(href)
+            if "/jobs/view/" not in href:
+                continue 
+            
+            href = "https://www.linkedin.com" + href if href.startswith("/") else href
+            canon = canonical_job_url(href)
+            job_urls.add(canon if canon else href)
+
 
     return list(job_urls)
 
@@ -90,6 +96,31 @@ def clean_description(raw_html: str) -> str:
         cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE)
     
     return cleaned.strip()
+
+def canonical_job_url(raw: str) -> str | None:
+    """
+    Return 'https://www.linkedin.com/jobs/view/<id>/' for any flavour of
+    LinkedIn job link.  Handles:
+
+      • /jobs/view/4191603147
+      • /jobs/view/security-operations-center-...-4191603147
+      • /jobs/view/?currentJobId=4191603147
+    """
+    parsed = urlparse(raw)
+
+    # 1) ID lives somewhere in the path (the common case)
+    m = _JOB_ID_RE.search(parsed.path)
+    if m:
+        job_id = m.group(1)
+        return f"https://www.linkedin.com/jobs/view/{job_id}/"
+
+    # 2) ID only appears in the query string (rare but possible)
+    qs = parse_qs(parsed.query)
+    for key in ("currentJobId", "jobId"):
+        if key in qs and qs[key]:
+            return f"https://www.linkedin.com/jobs/view/{qs[key][0]}/"
+
+    return None        # caller can fall back to the raw href if desired
 
 def extract_job_description(job_soup):
     # 1) look for ld+json
@@ -194,3 +225,21 @@ def get_job_data(job):
     
     return job_data
 
+if __name__ == "__main__":
+    searches = get_searches()
+    total_links, kept, dropped = 0, 0, 0
+
+    for s in searches:
+        soup = get_soup(s["url"])
+        for a in soup.find_all("a", href=True):
+            href = a["href"]
+            if "/jobs/view/" not in href:
+                continue
+            total_links += 1
+            canon = canonical_job_url("https://www.linkedin.com" + href if href.startswith("/") else href)
+            if canon is None:
+                dropped += 1
+                print("❌  DID NOT MATCH:", href[:120])
+            else:
+                kept += 1
+    print(f"\n{total_links=}  {kept=}  {dropped=}")

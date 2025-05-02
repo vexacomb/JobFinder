@@ -2,16 +2,14 @@
 
 JobFinder is a web application that allows users to search for job listings on LinkedIn and save them to a database.
 
-## Installation
+## Setup and Usage
 
 ```bash
-pip install -r requirements.txt
-```
-
-## Usage
-
-```bash
-python scrape.py
+git clone https://github.com/vexacomb/JobFinder
+cd JobFinder
+python -m venv .venv && .\.venv\Scripts\activate   # (optional but recommended)
+python setup.py                                    # installs deps + makes DB
+python main.py
 ```
 
 

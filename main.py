@@ -3,7 +3,7 @@ import scrape
 
 
 def main():
-    # database.create_table()
+    database.init_db()
     jobs = scrape.get_jobs()
 
     # Counters
@@ -11,6 +11,7 @@ def main():
 
     for job in jobs:
         job_data = scrape.get_job_data(job)
+        database.upsert_discovered(job_data)
         
 
     print("Total jobs: ", total_jobs)
