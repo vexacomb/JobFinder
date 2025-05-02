@@ -14,7 +14,7 @@ keywords = [
 ]
 
 
-def search():
+def get_search_urls():
     urls = []
 
     for location in locations:
@@ -31,18 +31,6 @@ def search():
 
     return urls
 
-
-    HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                  "(KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36"
-    }
-    soups = []
-    for url in urls:
-        resp = requests.get(url, headers=HEADERS)
-        if resp.status_code == 200:
-            soups.append(BeautifulSoup(resp.text, 'html.parser'))
-    return soups
-
 def get_soup(url):
     HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -55,16 +43,8 @@ def get_soup(url):
     return None
 
 def extract_job_urls(soups):
-    """Return unique LinkedIn job‐posting URLs.
-    The argument can be either:
-    • a single BeautifulSoup object, or
-    • an iterable (list / tuple / set) of BeautifulSoup objects.
-    """
-    
     if soups is None:
         return []
-
-    # Normalize to an iterable of soups
     if hasattr(soups, "find_all"):
         soups = [soups]
 
@@ -83,14 +63,7 @@ def strip_html_tags(raw: str) -> str:
     return BeautifulSoup(raw, "html.parser").get_text(" ", strip=True)
 
 def clean_description(raw_html: str) -> str:
-    """
-    Thoroughly clean job description HTML:
-    1. Decode HTML entities
-    2. Remove nested HTML tags
-    3. Convert list items to readable format
-    4. Remove excessive whitespace
-    5. Strip leading/trailing whitespace
-    """
+
     # First, decode HTML entities
     decoded = html.unescape(raw_html)
     
@@ -177,11 +150,11 @@ def extract_job_title(job_soup):
     return None
 
 def get_jobs():
-    search_urls = search()
+    search_urls = get_search_urls()
     job_urls = []
     for url in search_urls:
         soup = get_soup(url)
-        job_urls = extract_job_urls(soup)
+        job_urls.extend(extract_job_urls(soup))
 
 
     seen = set()
@@ -193,18 +166,12 @@ def get_jobs():
             unique_urls.append(url)
     return unique_urls
 
+def get_job_data(url):
+    job_soup = get_soup(url)
+    title = extract_job_title(job_soup)
 
+    if evaluate.contains_exclusions(title):
+        return
+    description = extract_job_description(job_soup)
+    return title, description, url
 
-
-def get_job_data(urls):
-
-    for url in urls:
-        job_soup = get_soup(url)
-        title = extract_job_title(job_soup)
-
-        if evaluate.contains_exclusions(title):
-            continue
-        description = extract_job_description(job_soup)
-        print(title)
-        print(description)
-        print(url, "\n")
