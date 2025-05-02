@@ -2,16 +2,11 @@ import requests
 from bs4 import BeautifulSoup
 import evaluate
 import json, html, re
+from config import load
 
-locations = [
-    "remote",  
-
-]
-
-keywords = [
-    "Security Operations Center Analyst",
-]
-
+config = load()
+locations = config["locations"]
+keywords = config["keywords"]
 
 def get_searches():
     searches = []
@@ -182,20 +177,11 @@ def get_job_data(job):
     job_soup = get_soup(url)
     title = ""
     description = ""
-    failed_to_fetch = False
-    failed_to_extract_title = False
-    failed_on_exclusion_keyword = False
 
 
 
-    if job_soup is None:
-        failed_to_fetch = True
-    else:
-        title = extract_job_title(job_soup)
-        if title is None:
-            failed_to_extract_title = True
-        failed_on_exclusion_keyword = evaluate.contains_exclusions(title)
-        description = extract_job_description(job_soup)
+
+
 
     
     job_data = {
@@ -204,9 +190,6 @@ def get_job_data(job):
         "keyword": keyword,
         "title": title,
         "description": description,
-        "failed_to_fetch": failed_to_fetch,
-        "failed_to_extract_title": failed_to_extract_title,
-        "failed_on_exclusion_keyword": failed_on_exclusion_keyword
     }
     
     return job_data

@@ -1,11 +1,8 @@
 import re
+from config import load
 
-exclusions = [
-    "Senior", "Sr.", "Sr", "Tier 2", "Level 2", "L2", "II", "III", "IV", "Lead", "Leader", "Manager", "Engineer",
-    "Director", "Principal", "Architect", "Security Clearance", "Secret Clearance", "Top Secret",
-    "TS/SCI", "Clearance Required", "Must be able to obtain clearance"
-]
-
+config = load()
+exclusions = config["exclusions"]
 
 
 def contains_exclusions(title):
