@@ -6,41 +6,44 @@ import json, html, re
 locations = [
     "remote",  
     "Winchester, Virginia, United States",
-    "Augusta, Georgia, United States"  
+    # "Augusta, Georgia, United States"  
 ]
 
 keywords = [
-"Security Operations Center Analyst"
+    "Security Operations Center Analyst",
+    "SOC Analyst",
+    "Security Analyst"
 ]
 
 
-def get_search_urls():
-    urls = []
+def get_searches():
+    searches = []
 
     for location in locations:
         for keyword in keywords:
+            
             if location.lower() == "remote":
                 # Search for remote positions
                 url = f"https://www.linkedin.com/jobs/search/?keywords={keyword.replace(' ', '%20')}&f_WT=2"
-                urls.append(url)
+                searches.append({"url": url, "location": location, "keyword": keyword})
             else:
                 url = f"https://www.linkedin.com/jobs/search/?keywords={keyword.replace(' ', '%20')}&location={location.replace(' ', '%20')}&distance=75&f_WT=1"
-                urls.append(url)
+                searches.append({"url": url, "location": location, "keyword": keyword})
                 url = f"https://www.linkedin.com/jobs/search/?keywords={keyword.replace(' ', '%20')}&location={location.replace(' ', '%20')}&distance=75&f_WT=3"
-                urls.append(url)
+                searches.append({"url": url, "location": location, "keyword": keyword})
 
-    return urls
+    return searches
 
 def get_soup(url):
     HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                   "(KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36"
     }
-
+    soup = None
     resp = requests.get(url, headers=HEADERS)
     if resp.status_code == 200:
-        return BeautifulSoup(resp.text, 'html.parser')
-    return None
+        soup =  BeautifulSoup(resp.text, 'html.parser')
+    return soup
 
 def extract_job_urls(soups):
     if soups is None:
@@ -150,28 +153,57 @@ def extract_job_title(job_soup):
     return None
 
 def get_jobs():
-    search_urls = get_search_urls()
-    job_urls = []
-    for url in search_urls:
+    searches = get_searches()
+    jobs = []
+    for search  in searches:
+        url = search["url"]
+        location = search["location"]
+        keyword = search["keyword"]
         soup = get_soup(url)
-        job_urls.extend(extract_job_urls(soup))
+        job_urls = extract_job_urls(soup)
+        for url in job_urls:
+            jobs.append({"url": url, "location": location, "keyword": keyword})
+        #job_urls.extend(extract_job_urls(soup))
 
 
     seen = set()
-    unique_urls = []
+    unique_jobs = []
 
-    for url in job_urls:
-        if url not in seen:
-            seen.add(url)
-            unique_urls.append(url)
-    return unique_urls
+    for job in jobs:
+        if job["url"] not in seen:
+            seen.add(job["url"])
+            unique_jobs.append(job)
+    return unique_jobs
 
 def get_job_data(url):
     job_soup = get_soup(url)
-    title = extract_job_title(job_soup)
+    location = ""
+    keyword = ""
+    title = ""
+    description = ""
+    failed_to_fetch = False
+    failed_to_extract_title = False
+    failed_on_exclusion_keyword = False
 
-    if evaluate.contains_exclusions(title):
-        return
-    description = extract_job_description(job_soup)
-    return title, description, url
+    job_data = {
+        "url": url,
+        "location": location,
+        "keyword": keyword,
+        "title": title,
+        "description": description,
+        "failed_to_fetch": failed_to_fetch,
+        "failed_to_extract_title": failed_to_extract_title,
+        "failed_on_exclusion_keyword": failed_on_exclusion_keyword
+    }
+
+    if job_soup is None:
+        failed_to_fetch = True
+    else:
+        title = extract_job_title(job_soup)
+        if title is None:
+            failed_to_extract_title = True
+            return job_data
+        failed_on_exclusion_keyword = evaluate.contains_exclusions(title)
+        description = extract_job_description(job_soup)
+        return job_data
 
