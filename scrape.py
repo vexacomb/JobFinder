@@ -5,14 +5,11 @@ import json, html, re
 
 locations = [
     "remote",  
-    "Winchester, Virginia, United States",
-    # "Augusta, Georgia, United States"  
+
 ]
 
 keywords = [
     "Security Operations Center Analyst",
-    "SOC Analyst",
-    "Security Analyst"
 ]
 
 
@@ -185,6 +182,18 @@ def get_job_data(url):
     failed_to_extract_title = False
     failed_on_exclusion_keyword = False
 
+
+
+    if job_soup is None:
+        failed_to_fetch = True
+    else:
+        title = extract_job_title(job_soup)
+        if title is None:
+            failed_to_extract_title = True
+        failed_on_exclusion_keyword = evaluate.contains_exclusions(title)
+        description = extract_job_description(job_soup)
+
+    
     job_data = {
         "url": url,
         "location": location,
@@ -195,15 +204,6 @@ def get_job_data(url):
         "failed_to_extract_title": failed_to_extract_title,
         "failed_on_exclusion_keyword": failed_on_exclusion_keyword
     }
-
-    if job_soup is None:
-        failed_to_fetch = True
-    else:
-        title = extract_job_title(job_soup)
-        if title is None:
-            failed_to_extract_title = True
-            return job_data
-        failed_on_exclusion_keyword = evaluate.contains_exclusions(title)
-        description = extract_job_description(job_soup)
-        return job_data
+    
+    return job_data
 
