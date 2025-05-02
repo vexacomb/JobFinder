@@ -1,6 +1,6 @@
 # JobFinder
 
-JobFinder is a web application that allows users to search for job listings on LinkedIn and save them to a database.
+JobFinder is a python application that allows users to search for job listings on LinkedIn and save them to a database.
 
 ## Setup and Usage
 

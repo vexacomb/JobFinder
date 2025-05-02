@@ -1,15 +1,44 @@
 import requests
 from bs4 import BeautifulSoup
 import evaluate
-import json, html, re
+import json, html, re, urllib
 from urllib.parse import urlparse, parse_qs
 from config import load
+import database
 
 config = load()
 locations = config["locations"]
 keywords = config["keywords"]
 
 _JOB_ID_RE = re.compile(r"/jobs/view/(?:[^/?]*-)?(\d+)(?:[/?]|$)")
+
+def process_search_page(search):
+    """Visit one LinkedIn search URL and stream rows into the DB."""
+    soup = get_soup(search["url"])
+    for a in soup.find_all("a", href=True):
+        text = a.get_text(" ", strip=True)
+        if evaluate.contains_exclusions(text):
+            continue
+
+        href = a["href"]
+        if "/jobs/view/" not in href:
+            continue
+
+        full  = "https://www.linkedin.com" + href if href.startswith("/") else href
+        url   = canonical_job_url(full)
+        job_id = extract_job_id(url)
+        if job_id is None:
+            continue      # can’t index it
+
+        # ---- 1) quick INSERT; skip rest of loop if already seen ----------
+        if not database.insert_stub(job_id, url, search["location"], search["keyword"]):
+            continue
+
+        # ---- 2) only NEW postings reach this point -----------------------
+        job_soup = get_soup(url)
+        title = extract_job_title(job_soup) if job_soup else None
+        desc  = extract_job_description(job_soup) if job_soup else None
+        database.update_details(job_id, title, desc)
 
 def get_searches():
     searches = []
@@ -178,6 +207,15 @@ def extract_job_title(job_soup):
 
     return None
 
+def extract_job_id(url: str) -> int | None:
+    m = _JOB_ID_RE.search(urllib.parse.urlparse(url).path)
+    if m:
+        return int(m.group(1))
+    qs = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+    for key in ("currentJobId", "jobId"):
+        if key in qs and qs[key]:
+            return int(qs[key][0])
+    return None
 def get_jobs():
     searches = get_searches()
     jobs = []

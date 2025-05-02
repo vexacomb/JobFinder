@@ -98,3 +98,27 @@ def fetch_unapproved() -> Iterable[sqlite3.Row]:
     """
     with get_conn() as conn:
         yield from conn.execute(sql)
+
+def insert_stub(job_id: int, url: str, location: str, keyword: str) -> bool:
+    """
+    Try to create a row with just the identifiers.
+    Returns True if a new row was inserted, False if it already existed.
+    """
+    sql = """
+    INSERT INTO discovered_jobs (job_id, url, location, keyword)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(job_id) DO NOTHING;
+    """
+    with get_conn() as conn:
+        cur = conn.execute(sql, (job_id, url, location, keyword))
+        return cur.rowcount == 1        # 1 == new row, 0 == duplicate
+
+def update_details(job_id: int, title: str | None, description: str | None):
+    sql = """
+    UPDATE discovered_jobs
+       SET title       = COALESCE(?, title),
+           description = COALESCE(?, description)
+     WHERE job_id = ?;
+    """
+    with get_conn() as conn:
+        conn.execute(sql, (title, description, job_id))
