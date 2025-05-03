@@ -32,7 +32,7 @@ def main() -> None:
     finally:
         end_total = _rowcount()
         print("\n──────────────── Summary ────────────────")
-        print(f"Links examined      : {processed}")
+        print(f"Links examined    : {processed}")
         print(f"New jobs this run : {end_total - start_total}")
         print(f"Total in database : {end_total}")
         print("──────────────────────────────────────────")

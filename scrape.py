@@ -7,6 +7,7 @@ from config import load
 import database
 import random
 from typing import Sequence, List, TypeVar
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 T = TypeVar("T")
 
@@ -24,41 +25,35 @@ def shuffled(seq: Sequence[T]) -> List[T]:
     random.shuffle(tmp)
     return tmp
 
-def process_search_page(search):
-    """Visit one LinkedIn search URL and stream rows into the DB."""
-
+def process_search_page(search) -> int:
     handled = 0
+    new_jobs = []                     # collect only *new* rows
+
     soup = get_soup(search["url"])
     if soup is None:
         return 0
 
-    
     for a in soup.find_all("a", href=True):
-        text = a.get_text(" ", strip=True)
-        if evaluate.contains_exclusions(text):
+        if "/jobs/view/" not in a["href"]:
             continue
+        handled += 1
 
-        href = a["href"]
-        if "/jobs/view/" not in href:
-            continue
-
-        full  = "https://www.linkedin.com" + href if href.startswith("/") else href
-        url   = canonical_job_url(full)
+        full   = "https://www.linkedin.com" + a["href"] if a["href"].startswith("/") else a["href"]
+        url    = canonical_job_url(full)
         job_id = extract_job_id(url)
         if job_id is None:
-            continue      # can’t index it
-
-        # ---- 1) quick INSERT; skip rest of loop if already seen ----------
-        if not database.insert_stub(job_id, url, search["location"], search["keyword"]):
             continue
 
-        # ---- 2) only NEW postings reach this point -----------------------
-        job_soup = get_soup(url)
-        title = extract_job_title(job_soup) if job_soup else None
-        desc  = extract_job_description(job_soup) if job_soup else None
-        database.update_details(job_id, title, desc)
-        handled += 1
-    return handled
+        if database.insert_stub(job_id, url, search["location"], search["keyword"]):
+            new_jobs.append({"job_id": job_id, "url": url})
+
+    # ---- parallel fetch/update for every NEW posting on this page ----
+    if new_jobs:
+        with ThreadPoolExecutor(max_workers=8) as pool:   # 5‑10 is a good range
+            list(pool.map(_fetch_and_update, new_jobs))
+
+    return handled        # every call still returns an int
+
 def get_searches():
     searches = []
 
@@ -235,6 +230,7 @@ def extract_job_id(url: str) -> int | None:
         if key in qs and qs[key]:
             return int(qs[key][0])
     return None
+
 def get_jobs():
     searches = get_searches()
     jobs = []
@@ -281,6 +277,21 @@ def get_job_data(job):
     }
     
     return job_data
+
+def _fetch_and_update(job: dict) -> None:
+    """
+    Worker run in a thread:
+      1) download the job page
+      2) extract title & description
+      3) write them into the DB
+    """
+    job_soup = get_soup(job["url"])
+    if job_soup is None:
+        return                       # network issue – leave stub row as‑is
+
+    title = extract_job_title(job_soup)
+    desc  = extract_job_description(job_soup)
+    database.update_details(job["job_id"], title, desc)
 
 if __name__ == "__main__":
     searches = get_searches()
