@@ -5,16 +5,34 @@ import json, html, re, urllib
 from urllib.parse import urlparse, parse_qs
 from config import load
 import database
+import random
+from typing import Sequence, List, TypeVar
+
+T = TypeVar("T")
 
 config = load()
 locations = config["locations"]
 keywords = config["keywords"]
 
+
+
 _JOB_ID_RE = re.compile(r"/jobs/view/(?:[^/?]*-)?(\d+)(?:[/?]|$)")
+
+def shuffled(seq: Sequence[T]) -> List[T]:
+    """Return a new list containing all items from *seq* in random order."""
+    tmp = list(seq)          # copy so the caller’s list is untouched
+    random.shuffle(tmp)
+    return tmp
 
 def process_search_page(search):
     """Visit one LinkedIn search URL and stream rows into the DB."""
+
+    handled = 0
     soup = get_soup(search["url"])
+    if soup is None:
+        return 0
+
+    
     for a in soup.find_all("a", href=True):
         text = a.get_text(" ", strip=True)
         if evaluate.contains_exclusions(text):
@@ -39,12 +57,13 @@ def process_search_page(search):
         title = extract_job_title(job_soup) if job_soup else None
         desc  = extract_job_description(job_soup) if job_soup else None
         database.update_details(job_id, title, desc)
-
+        handled += 1
+    return handled
 def get_searches():
     searches = []
 
-    for location in locations:
-        for keyword in keywords:
+    for location in shuffled(locations):
+        for keyword in shuffled(keywords):
             
             if location.lower() == "remote":
                 # Search for remote positions
