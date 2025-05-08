@@ -1,51 +1,55 @@
-# main.py
-import database
-import scrape
+import subprocess
 import sys
-from evaluate import analyze_job
+from pathlib import Path
 
-def _rowcount() -> int:
-    with database.get_conn() as conn:
-        return conn.execute("SELECT COUNT(*) FROM discovered_jobs").fetchone()[0]
+# This script now primarily launches the Streamlit dashboard.
+# The actual application logic (scraping, database interaction)
+# will be invoked from the dashboard or other modules.
 
-def show_progress(idx: int, total: int, bar_len: int = 40) -> None:
-    """Render a simple progress bar like  [██████------] 12/44 (27%)"""
-    pct   = idx / total
-    filled = int(bar_len * pct)
-    bar   = "█" * filled + "-" * (bar_len - filled)
-    sys.stdout.write(f"\r[{bar}] {idx}/{total} ({pct:.0%})")
-    sys.stdout.flush()
+def launch_dashboard():
+    """
+    Launches the Streamlit dashboard.
+    """
+    dashboard_script_path = Path(__file__).resolve().parent / "01_Dashboard.py"
+    
+    if not dashboard_script_path.exists():
+        print(f"Error: Dashboard script not found at {dashboard_script_path}")
+        print("Please ensure 'dashboard.py' is in the project root directory.")
+        sys.exit(1)
 
-def scrape_phase() -> None:
-    start_total = _rowcount()
+    # If using a venv and runner scripts, setup.py ensures streamlit is in the venv.
+    # The runner scripts (run_app.bat/sh) would call this main.py using the venv python.
+    # So, sys.executable should point to the venv's python.
+    # We can find streamlit executable relative to sys.executable or hope it's in PATH.
+    # A more robust way if venv is well-defined:
+    venv_dir = Path(__file__).resolve().parent / ".venv"
+    if sys.platform == "win32":
+        streamlit_exe = venv_dir / "Scripts" / "streamlit.exe"
+    else:
+        streamlit_exe = venv_dir / "bin" / "streamlit"
 
-    print("Initializing scraping: Generating search list...")
-    sys.stdout.flush() # Ensure the message prints immediately
+    if not streamlit_exe.exists():
+        # Fallback to assuming streamlit is in PATH (less reliable for isolated envs)
+        streamlit_exe = "streamlit" 
+        print(f"Warning: Streamlit executable not found in .venv, trying global 'streamlit'.")
 
-    searches = scrape.get_searches()
-    total_searches = len(searches)
+    command = [str(streamlit_exe), "run", str(dashboard_script_path)]
 
-    processed_job_count = 0
+    print(f"Launching dashboard with command: {' '.join(command)}")
     try:
-        for i, search in enumerate(searches, 1):
-            links_on_page = scrape.process_search_page(search) or 0
-            processed_job_count += links_on_page
-            show_progress(i, total_searches)
+        subprocess.run(command, check=True)
+    except FileNotFoundError:
+        print(f"Error: Failed to find '{streamlit_exe}'. Is Streamlit installed and in your PATH or venv?")
+        print(f"Please ensure setup.py has run successfully and your venv is correctly used.")
+    except subprocess.CalledProcessError as e:
+        print(f"Error launching dashboard: {e}")
     except KeyboardInterrupt:
-        print("\n⚠️  Interrupted by user – finishing up …")
+        print("\nDashboard launch interrupted by user.")
     finally:
-        end_total = _rowcount()
-        print("\n──────────────── Summary ────────────────")
-        print(f"Links examined    : {processed_job_count}")
-        print(f"New jobs discovered this run : {end_total - start_total}")
-        print(f"Total discovered jobs in database : {end_total}")
-        print("──────────────────────────────────────────")
-
-
-def main() -> None:
-    database.init_db()
-    scrape_phase()
-
+        print("Dashboard closed or failed to launch.")
 
 if __name__ == "__main__":
-    main()
+    # Database initialization is now part of setup.py and can also be
+    # triggered from the dashboard if needed for specific actions.
+    # For now, setup.py handles initial DB creation.
+    launch_dashboard()

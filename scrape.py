@@ -385,6 +385,68 @@ def _fetch_guest(job_id: int) -> tuple[str | None, str | None]:
     desc  = clean_description(d_el.decode_contents()) if d_el else None
     return title, desc
 
+def _rowcount() -> int:
+    """Returns the current count of discovered_jobs."""
+    # This function uses database.get_conn, ensure 'database' module is imported in scrape.py
+    with database.get_conn() as conn:
+        return conn.execute("SELECT COUNT(*) FROM discovered_jobs").fetchone()[0]
+
+def show_progress(idx: int, total: int, bar_len: int = 40) -> None:
+    """Render a simple progress bar like  [██████------] 12/44 (27%)"""
+    # This function uses sys, ensure 'sys' module is imported in scrape.py
+    pct   = idx / total if total > 0 else 0 # Avoid division by zero
+    filled = int(bar_len * pct)
+    bar   = "█" * filled + "-" * (bar_len - filled)
+    # Use sys.stdout.write for progress bar to allow overwriting
+    sys.stdout.write(f"\r[{bar}] {idx}/{total} ({pct:.0%})")
+    sys.stdout.flush()
+
+def scrape_phase() -> tuple[int, int]:
+    """
+    Conducts the scraping phase.
+    Returns a tuple: (new_jobs_this_run, total_links_examined)
+    """
+    # This function uses _rowcount, get_searches, process_search_page, show_progress
+    # Ensure 'database' module is imported for _rowcount.
+    # Ensure 'sys' is imported for show_progress and print flushing.
+    print("Initializing scraping: Generating search list...")
+    sys.stdout.flush()
+
+    start_total_db_rows = _rowcount()
+    searches = get_searches() # Assumes get_searches is defined in scrape.py
+    total_searches = len(searches)
+
+    if not searches:
+        print("No search criteria defined in config.toml or an issue occurred generating searches.")
+        return 0, 0 # No new jobs, no links examined
+
+    print(f"Generated {total_searches} search permutations. Starting job processing...")
+    sys.stdout.flush()
+
+    total_links_examined_this_run = 0
+    try:
+        for i, search in enumerate(searches, 1):
+            links_on_page = process_search_page(search) or 0 # process_search_page is in scrape.py
+            total_links_examined_this_run += links_on_page
+            show_progress(i, total_searches)
+    except KeyboardInterrupt:
+        sys.stdout.write("\n⚠️  Interrupted by user during scraping – finishing up current operations…\n")
+        sys.stdout.flush()
+    finally:
+        # Ensure a newline after the progress bar finishes or is interrupted
+        sys.stdout.write("\n") 
+        sys.stdout.flush()
+
+        end_total_db_rows = _rowcount()
+        new_jobs_this_run = end_total_db_rows - start_total_db_rows
+        
+        print("──────────────── Scrape Phase Summary ────────────────")
+        print(f"Links examined this run: {total_links_examined_this_run}")
+        print(f"New jobs added to DB this run: {new_jobs_this_run}")
+        print(f"Total discovered jobs in database: {end_total_db_rows}")
+        print("──────────────────────────────────────────────────")
+        sys.stdout.flush()
+        return new_jobs_this_run, total_links_examined_this_run
 
 if __name__ == "__main__":
     searches = get_searches()

@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS approved_jobs (
     discovered_job_id INTEGER UNIQUE NOT NULL,
     date_approved     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     reason            TEXT,
+    date_applied      TIMESTAMP NULL, -- Added new column, allow NULL
     FOREIGN KEY (discovered_job_id)
         REFERENCES discovered_jobs(id) ON DELETE CASCADE
 );
@@ -55,9 +56,27 @@ CREATE TABLE IF NOT EXISTS approved_jobs (
 
 
 def init_db() -> None:
-    """Create the database file and tables if they do not exist."""
+    """Create the database file and tables if they do not exist.
+    Also attempts to add new columns to existing tables if they are missing.
+    """
     with get_conn() as conn:
-        conn.executescript(DDL_DISCOVERED + DDL_APPROVED)
+        conn.executescript(DDL_DISCOVERED) # Create discovered_jobs first
+        conn.executescript(DDL_APPROVED)   # Create approved_jobs
+
+        # Attempt to add the date_applied column to approved_jobs if it doesn't exist
+        # This is a simple way to handle schema migration for this specific column.
+        try:
+            # Check if the column exists first to avoid errors on subsequent runs
+            cursor = conn.execute("PRAGMA table_info(approved_jobs);")
+            columns = [row['name'] for row in cursor.fetchall()]
+            if 'date_applied' not in columns:
+                conn.execute("ALTER TABLE approved_jobs ADD COLUMN date_applied TIMESTAMP NULL;")
+                print("Added 'date_applied' column to 'approved_jobs' table.")
+        except sqlite3.Error as e:
+            # This might happen if the table doesn't exist yet (should be handled by executescript)
+            # or if there's another issue with the ALTER TABLE command.
+            # For a more robust migration system, a dedicated library would be used.
+            print(f"Notice: Could not add 'date_applied' column (may already exist or other issue): {e}")
 
 
 # -- CRUD helpers ------------------------------------------------------------
@@ -161,3 +180,35 @@ def mark_job_as_analyzed(job_id: int) -> None:
     with get_conn() as conn:
         conn.execute(sql, (job_id,))
 
+def clear_all_approved_jobs() -> int:
+    """Deletes all records from the approved_jobs table.
+    Returns the number of rows deleted.
+    """
+    sql = "DELETE FROM approved_jobs;"
+    with get_conn() as conn:
+        cur = conn.execute(sql)
+        return cur.rowcount
+    
+def mark_job_as_applied(approved_job_pk: int) -> bool:
+    """Marks a specific job in approved_jobs as applied by setting the date_applied.
+    Uses the primary key (id) of the approved_jobs table.
+    Returns True if the update was successful and a row was affected, False otherwise.
+    """
+    sql = """
+    UPDATE approved_jobs
+    SET date_applied = CURRENT_TIMESTAMP
+    WHERE id = ? AND date_applied IS NULL; -- Only update if not already applied
+    """
+    with get_conn() as conn:
+        cur = conn.execute(sql, (approved_job_pk,))
+        return cur.rowcount > 0 # rowcount is 1 if updated, 0 if already applied or not found
+
+def delete_approved_job(approved_job_pk: int) -> bool:
+    """Deletes a specific job from the approved_jobs table.
+    Uses the primary key (id) of the approved_jobs table.
+    Returns True if a row was deleted, False otherwise.
+    """
+    sql = "DELETE FROM approved_jobs WHERE id = ?;"
+    with get_conn() as conn:
+        cur = conn.execute(sql, (approved_job_pk,))
+        return cur.rowcount > 0
