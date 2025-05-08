@@ -37,7 +37,7 @@ def scrape_phase() -> None:
         end_total = _rowcount()
         print("\n──────────────── Summary ────────────────")
         print(f"Links examined    : {processed_job_count}")
-        print(f"New jobs discoveredthis run : {end_total - start_total}")
+        print(f"New jobs discovered this run : {end_total - start_total}")
         print(f"Total discovered jobs in database : {end_total}")
         print("──────────────────────────────────────────")
 

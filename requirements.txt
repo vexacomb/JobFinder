@@ -5,3 +5,4 @@ python-dotenv
 tomli
 openai
 google-generativeai
+streamlit
