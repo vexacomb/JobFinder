@@ -1,3 +1,5 @@
+# scrape.py
+
 import requests
 from bs4 import BeautifulSoup
 import evaluate
@@ -8,6 +10,8 @@ import database
 import random
 from typing import Sequence, List, TypeVar
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
+from http import HTTPStatus
 
 T = TypeVar("T")
 
@@ -15,6 +19,17 @@ config = load()
 locations = config["locations"]
 keywords = config["keywords"]
 
+MAX_WORKERS = 2
+RETRIES     = 4
+BASE_DELAY  = 2  # seconds
+
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    )
+}
 
 
 _JOB_ID_RE = re.compile(r"/jobs/view/(?:[^/?]*-)?(\d+)(?:[/?]|$)")
@@ -27,7 +42,7 @@ def shuffled(seq: Sequence[T]) -> List[T]:
 
 def process_search_page(search) -> int:
     handled = 0
-    new_jobs = []                     # collect only *new* rows
+    jobs_for_update = []
 
     soup = get_soup(search["url"])
     if soup is None:
@@ -44,15 +59,15 @@ def process_search_page(search) -> int:
         if job_id is None:
             continue
 
-        if database.insert_stub(job_id, url, search["location"], search["keyword"]):
-            new_jobs.append({"job_id": job_id, "url": url})
+        is_new = database.insert_stub(job_id, url, search["location"], search["keyword"])
+        if is_new or database.row_missing_details(job_id):
+            jobs_for_update.append({"job_id": job_id, "url": url})
 
-    # ---- parallel fetch/update for every NEW posting on this page ----
-    if new_jobs:
-        with ThreadPoolExecutor(max_workers=8) as pool:   # 5‑10 is a good range
-            list(pool.map(_fetch_and_update, new_jobs))
+    if jobs_for_update:
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+            list(pool.map(_fetch_and_update, jobs_for_update))
 
-    return handled        # every call still returns an int
+    return handled
 
 def get_searches():
     searches = []
@@ -279,19 +294,53 @@ def get_job_data(job):
     return job_data
 
 def _fetch_and_update(job: dict) -> None:
-    """
-    Worker run in a thread:
-      1) download the job page
-      2) extract title & description
-      3) write them into the DB
-    """
-    job_soup = get_soup(job["url"])
-    if job_soup is None:
-        return                       # network issue – leave stub row as‑is
+    title = desc = None
 
-    title = extract_job_title(job_soup)
-    desc  = extract_job_description(job_soup)
-    database.update_details(job["job_id"], title, desc)
+    soup = get_soup(job["url"])
+    if soup:
+        title = extract_job_title(soup)
+        desc  = extract_job_description(soup)
+
+    if title is None or desc is None:
+        g_title, g_desc = _fetch_guest(job["job_id"])
+        if title is None:
+            title = g_title
+        if desc is None:
+            desc = g_desc
+
+    if title is not None or desc is not None:
+        database.update_details(job["job_id"], title, desc)
+
+
+def _safe_fetch(url: str) -> str | None:
+    delay = BASE_DELAY
+    for _ in range(RETRIES):
+        r = requests.get(url, headers=HEADERS, timeout=15)
+        if r.status_code == 200:
+            return r.text
+        if r.status_code in (429, 502, 503, 504):
+            time.sleep(delay)
+            delay *= 2
+            continue
+        return None
+    return None
+
+
+def _fetch_guest(job_id: int) -> tuple[str | None, str | None]:
+    url  = f"https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{job_id}"
+    html = _safe_fetch(url)
+    if not html:
+        return None, None
+    soup = BeautifulSoup(html, "html.parser")
+
+    t_el = soup.find("h2", class_="top-card-layout__title")
+    d_el = soup.find("div", class_="description__text") or \
+           soup.find("section", class_="show-more-less-html")
+
+    title = t_el.get_text(strip=True) if t_el else None
+    desc  = clean_description(d_el.decode_contents()) if d_el else None
+    return title, desc
+
 
 if __name__ == "__main__":
     searches = get_searches()

@@ -1,3 +1,5 @@
+# database.py
+
 from pathlib import Path
 import sqlite3
 from contextlib import contextmanager
@@ -34,7 +36,8 @@ CREATE TABLE IF NOT EXISTS discovered_jobs (
     description     TEXT,
     location        TEXT,
     keyword         TEXT,
-    date_discovered TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    date_discovered TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    analyzed        BOOLEAN DEFAULT FALSE
 );
 """
 
@@ -43,10 +46,12 @@ CREATE TABLE IF NOT EXISTS approved_jobs (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     discovered_job_id INTEGER UNIQUE NOT NULL,
     date_approved     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(discovered_job_id)
+    reason            TEXT,
+    FOREIGN KEY (discovered_job_id)
         REFERENCES discovered_jobs(id) ON DELETE CASCADE
 );
 """
+
 
 
 def init_db() -> None:
@@ -60,9 +65,9 @@ def upsert_discovered(job: Dict[str, Any]) -> None:
     """Insert a job if it is new; ignore duplicates (thanks to UNIQUE on url)."""
     sql = """
     INSERT INTO discovered_jobs
-        (job_id, url, title, description, location, keyword)
+        (job_id, url, title, description, location, keyword, analyzed)
     VALUES
-        (:job_id, :url, :title, :description, :location, :keyword)
+        (:job_id, :url, :title, :description, :location, :keyword, :analyzed)
     ON CONFLICT(job_id) DO NOTHING;
     """
     job["job_id"] = int(_JOB_ID_RE.search(job["url"]).group(1))
@@ -80,8 +85,8 @@ def approve_job(url: str) -> bool:
         if not row:
             return False
         conn.execute(
-            "INSERT OR IGNORE INTO approved_jobs (discovered_job_id) VALUES (?);",
-            (row["id"],),
+            "INSERT OR IGNORE INTO approved_jobs (discovered_job_id, reason) VALUES (?, ?);",
+            (row["id"], row["reason"]),
         )
         return True
 
@@ -105,15 +110,27 @@ def insert_stub(job_id: int, url: str, location: str, keyword: str) -> bool:
     Returns True if a new row was inserted, False if it already existed.
     """
     sql = """
-    INSERT INTO discovered_jobs (job_id, url, location, keyword)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO discovered_jobs (job_id, url, location, keyword, analyzed)
+    VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(job_id) DO NOTHING;
     """
     with get_conn() as conn:
-        cur = conn.execute(sql, (job_id, url, location, keyword))
+        cur = conn.execute(sql, (job_id, url, location, keyword, False))
         return cur.rowcount == 1        # 1 == new row, 0 == duplicate
 
-def update_details(job_id: int, title: str | None, description: str | None):
+def row_missing_details(job_id: int) -> bool:
+    sql = """
+    SELECT 1
+      FROM discovered_jobs
+     WHERE job_id = ?
+       AND (title IS NULL OR title = '' OR description IS NULL OR description = '')
+     LIMIT 1;
+    """
+    with get_conn() as conn:
+        return conn.execute(sql, (job_id,)).fetchone() is not None
+
+
+def update_details(job_id: int, title: str | None, desc: str | None) -> None:
     sql = """
     UPDATE discovered_jobs
        SET title       = COALESCE(?, title),
@@ -121,4 +138,4 @@ def update_details(job_id: int, title: str | None, description: str | None):
      WHERE job_id = ?;
     """
     with get_conn() as conn:
-        conn.execute(sql, (title, description, job_id))
+        conn.execute(sql, (title, desc, job_id))
