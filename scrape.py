@@ -13,7 +13,7 @@ from typing import Sequence, List, TypeVar
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 from http import HTTPStatus
-
+import sys
 
 T = TypeVar("T")
 
@@ -21,7 +21,7 @@ config = load()
 locations = config["locations"]
 keywords = config["keywords"]
 
-MAX_WORKERS = 2
+MAX_WORKERS = 5
 RETRIES     = 4
 BASE_DELAY  = 2  # seconds
 
@@ -296,44 +296,63 @@ def get_job_data(job):
     return job_data
 
 def _fetch_and_update(job: dict) -> None:
-    title = desc = None
-    linkedin_job_id = job["job_id"] # Get the LinkedIn job ID
+    # For timing, uncomment if desired
+    # start_time_total = time.time()
 
-    soup = get_soup(job["url"])
+    title = None # Initialize to None
+    desc = None  # Initialize to None
+    linkedin_job_id = job["job_id"]
+    job_url = job["url"]
+
+    soup = get_soup(job_url) # Use job_url consistently
     if soup:
         title = extract_job_title(soup)
         desc  = extract_job_description(soup)
 
     if title is None or desc is None:
-        # Try fetching via guest API if direct scrape didn't get full details
         g_title, g_desc = _fetch_guest(linkedin_job_id)
         if title is None:
             title = g_title
         if desc is None:
             desc = g_desc
 
-    # Update job details in the database if any were found
     if title is not None or desc is not None:
         database.update_details(linkedin_job_id, title, desc)
 
-    # Perform AI evaluation if a description was obtained
-    if desc and desc.strip(): # Ensure description is not None and not empty
+    if desc and desc.strip():
         try:
-            # analyze_job defaults to Gemini as per our earlier change in evaluate.py
-            ai_response = analyze_job(job_description=desc)
+            # For timing, uncomment if desired
+            # ai_eval_start_time = time.time()
+            
+            ai_response = analyze_job(job_description=desc) 
+            
+            # For timing, uncomment if desired
+            # print(f"Job ID {linkedin_job_id}: AI analysis took {time.time() - ai_eval_start_time:.2f}s")
 
             if ai_response.get("eligible"):
-                reasoning = ai_response.get("reasoning", "") # Get reasoning, default to empty string if not present
-                database.approve_job(linkedin_job_id=linkedin_job_id, reason=reasoning)
-        except Exception as e:
-            # Log or handle the error if AI analysis fails
-            print(f"Error during AI analysis for job_id {linkedin_job_id}: {e}")
-            # Depending on the error, you might choose not to mark as analyzed,
-            # but for now, we will mark it to avoid retrying on persistent errors.
+                reasoning = ai_response.get("reasoning", "No reasoning provided by AI.")
+                
+                # Call approve_job once and store its result
+                was_newly_approved = database.approve_job(linkedin_job_id=linkedin_job_id, reason=reasoning)
 
-    # Mark the job as analyzed in all cases (details found/not found, AI success/failure)
-    # This prevents it from being picked up again by row_missing_details for detail fetching.
+                if was_newly_approved:
+                    # Print details to console only if it was newly approved
+                    output_message = (
+                        f"\n[APPROVED] Job ID: {linkedin_job_id}\n"
+                        f"  Title: {title if title else 'N/A - Title not found'}\n"
+                        f"  URL: {job_url}\n"
+                        f"  Reason: {reasoning}\n"
+                    )
+                    sys.stdout.write(output_message)
+                    sys.stdout.flush()
+        except Exception as e:
+            error_message = f"\nError during AI analysis or approval for job_id {linkedin_job_id}: {e}\n"
+            sys.stdout.write(error_message)
+            sys.stdout.flush()
+
     database.mark_job_as_analyzed(job_id=linkedin_job_id)
+    # For timing, uncomment if desired
+    # print(f"Job ID {linkedin_job_id}: Total _fetch_and_update took {time.time() - start_time_total:.2f}s")
 
 
 

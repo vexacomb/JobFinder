@@ -19,22 +19,26 @@ def show_progress(idx: int, total: int, bar_len: int = 40) -> None:
 def scrape_phase() -> None:
     start_total = _rowcount()
 
+    print("Initializing scraping: Generating search list...")
+    sys.stdout.flush() # Ensure the message prints immediately
+
     searches = scrape.get_searches()
     total_searches = len(searches)
 
-    processed = 0
+    processed_job_count = 0
     try:
         for i, search in enumerate(searches, 1):
-            processed += scrape.process_search_page(search) or 0
+            links_on_page = scrape.process_search_page(search) or 0
+            processed_job_count += links_on_page
             show_progress(i, total_searches)
     except KeyboardInterrupt:
         print("\n⚠️  Interrupted by user – finishing up …")
     finally:
         end_total = _rowcount()
         print("\n──────────────── Summary ────────────────")
-        print(f"Links examined    : {processed}")
-        print(f"New jobs this run : {end_total - start_total}")
-        print(f"Total in database : {end_total}")
+        print(f"Links examined    : {processed_job_count}")
+        print(f"New jobs discoveredthis run : {end_total - start_total}")
+        print(f"Total discovered jobs in database : {end_total}")
         print("──────────────────────────────────────────")
 
 
