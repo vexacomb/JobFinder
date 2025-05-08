@@ -99,10 +99,10 @@ def call_gemini(prompt: str, temperature: float = 0) -> dict:
     return json.loads(txt)
 
 
-def analyse_job(
+def analyze_job(
     job_description: str,
     resume: str | None = default_resume,
-    provider: str = "openai",
+    provider: str = "gemini",
     temperature: float = 0,
 ) -> Dict[str, Any]:
 

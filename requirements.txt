@@ -3,11 +3,5 @@ beautifulsoup4
 psycopg2
 python-dotenv
 tomli
-smtplib
-email
-email.utils
-email.mime
-email.mime.multipart
-email.mime.text
 openai
 google-generativeai

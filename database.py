@@ -75,20 +75,30 @@ def upsert_discovered(job: Dict[str, Any]) -> None:
         conn.execute(sql, job)
 
 
-def approve_job(url: str) -> bool:
-    """Mark a job as approved by URL.  
-    Returns True on success, False if the URL was not found.
+def approve_job(linkedin_job_id: int, reason: str) -> bool:
+    """Mark a job as approved by its LinkedIn job_id.
+    Inserts into approved_jobs if the job is found in discovered_jobs and not already approved.
+    Returns True if a new row was inserted into approved_jobs, False otherwise.
     """
     with get_conn() as conn:
-        cur = conn.execute("SELECT id FROM discovered_jobs WHERE url = ?;", (url,))
-        row = cur.fetchone()
+        # First, get the discovered_jobs.id (PK) using the linkedin_job_id
+        cur_select = conn.execute("SELECT id FROM discovered_jobs WHERE job_id = ?;", (linkedin_job_id,))
+        row = cur_select.fetchone()
+
         if not row:
+            # No job found in discovered_jobs with this LinkedIn job_id
             return False
-        conn.execute(
-            "INSERT OR IGNORE INTO approved_jobs (discovered_job_id, reason) VALUES (?, ?);",
-            (row["id"], row["reason"]),
-        )
-        return True
+
+        discovered_job_row_id = row["id"]
+
+        # Now insert into approved_jobs
+        sql_insert = """
+        INSERT INTO approved_jobs (discovered_job_id, reason)
+        VALUES (?, ?)
+        ON CONFLICT(discovered_job_id) DO NOTHING;
+        """
+        cur_insert = conn.execute(sql_insert, (discovered_job_row_id, reason))
+        return cur_insert.rowcount == 1
 
 
 def fetch_unapproved() -> Iterable[sqlite3.Row]:
@@ -124,6 +134,7 @@ def row_missing_details(job_id: int) -> bool:
       FROM discovered_jobs
      WHERE job_id = ?
        AND (title IS NULL OR title = '' OR description IS NULL OR description = '')
+       AND analyzed = FALSE
      LIMIT 1;
     """
     with get_conn() as conn:
@@ -139,3 +150,14 @@ def update_details(job_id: int, title: str | None, desc: str | None) -> None:
     """
     with get_conn() as conn:
         conn.execute(sql, (title, desc, job_id))
+
+def mark_job_as_analyzed(job_id: int) -> None:
+    """Mark a job as analyzed in the discovered_jobs table."""
+    sql = """
+    UPDATE discovered_jobs
+       SET analyzed = TRUE
+     WHERE job_id = ?;
+    """
+    with get_conn() as conn:
+        conn.execute(sql, (job_id,))
+

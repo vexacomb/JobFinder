@@ -3,6 +3,7 @@
 import requests
 from bs4 import BeautifulSoup
 import evaluate
+from evaluate import analyze_job
 import json, html, re, urllib
 from urllib.parse import urlparse, parse_qs
 from config import load
@@ -12,6 +13,7 @@ from typing import Sequence, List, TypeVar
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 from http import HTTPStatus
+
 
 T = TypeVar("T")
 
@@ -295,6 +297,7 @@ def get_job_data(job):
 
 def _fetch_and_update(job: dict) -> None:
     title = desc = None
+    linkedin_job_id = job["job_id"] # Get the LinkedIn job ID
 
     soup = get_soup(job["url"])
     if soup:
@@ -302,14 +305,36 @@ def _fetch_and_update(job: dict) -> None:
         desc  = extract_job_description(soup)
 
     if title is None or desc is None:
-        g_title, g_desc = _fetch_guest(job["job_id"])
+        # Try fetching via guest API if direct scrape didn't get full details
+        g_title, g_desc = _fetch_guest(linkedin_job_id)
         if title is None:
             title = g_title
         if desc is None:
             desc = g_desc
 
+    # Update job details in the database if any were found
     if title is not None or desc is not None:
-        database.update_details(job["job_id"], title, desc)
+        database.update_details(linkedin_job_id, title, desc)
+
+    # Perform AI evaluation if a description was obtained
+    if desc and desc.strip(): # Ensure description is not None and not empty
+        try:
+            # analyze_job defaults to Gemini as per our earlier change in evaluate.py
+            ai_response = analyze_job(job_description=desc)
+
+            if ai_response.get("eligible"):
+                reasoning = ai_response.get("reasoning", "") # Get reasoning, default to empty string if not present
+                database.approve_job(linkedin_job_id=linkedin_job_id, reason=reasoning)
+        except Exception as e:
+            # Log or handle the error if AI analysis fails
+            print(f"Error during AI analysis for job_id {linkedin_job_id}: {e}")
+            # Depending on the error, you might choose not to mark as analyzed,
+            # but for now, we will mark it to avoid retrying on persistent errors.
+
+    # Mark the job as analyzed in all cases (details found/not found, AI success/failure)
+    # This prevents it from being picked up again by row_missing_details for detail fetching.
+    database.mark_job_as_analyzed(job_id=linkedin_job_id)
+
 
 
 def _safe_fetch(url: str) -> str | None:

@@ -2,7 +2,7 @@
 import database
 import scrape
 import sys
-from evaluate import analyse_job
+from evaluate import analyze_job
 
 def _rowcount() -> int:
     with database.get_conn() as conn:
@@ -37,26 +37,11 @@ def scrape_phase() -> None:
         print(f"Total in database : {end_total}")
         print("──────────────────────────────────────────")
 
-def evaluate_phase(limit: int | None = None) -> None:
-    from database import get_conn
-    with get_conn() as conn:
-        cur = conn.execute("SELECT id, url, COALESCE(description,'') AS description FROM discovered_jobs")
-        for idx, row in enumerate(cur, 1):
-            if limit and idx > limit:
-                break
-            if not row["description"].strip():       # skip blank descriptions
-                continue
-            res_openai  = analyse_job(row["description"], provider="openai",  temperature=0)
-            res_gemini  = analyse_job(row["description"], provider="gemini", temperature=0)
-            if res_openai["eligible"] != res_gemini["eligible"]:
-                print(f"{row['id']} {row['url']}\n  openai: {res_openai['eligible']}  gemini: {res_gemini['eligible']}\n")
-                print(f"OpenAI:\n\n{res_openai['reasoning']}\n\nGemini:\n\n{res_gemini['reasoning']}\n")
-
 
 def main() -> None:
     database.init_db()
-    # scrape_phase()
-    evaluate_phase(limit=10)
+    scrape_phase()
+
 
 if __name__ == "__main__":
     main()
