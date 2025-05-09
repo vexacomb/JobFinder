@@ -42,16 +42,11 @@ JobFinder is a Python application designed to automate the process of finding re
 
 
 1.  **Activate the virtual environment:**
-    *   On Windows (PowerShell):
+    *   Windows:
         ```powershell
-        .\.venv\Scripts\Activate.ps1
+        .\.venv\Scripts\activate
         ```
-        (If you encounter an execution policy error, you might need to run `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process` once in that PowerShell session.)
-    *   On Windows (Command Prompt):
-        ```cmd
-        .\.venv\Scripts\activate.bat
-        ```
-    *   On Linux/macOS:
+    *   Linux/macOS:
         ```bash
         source .venv/bin/activate
         ```

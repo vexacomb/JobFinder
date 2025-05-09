@@ -21,9 +21,16 @@ except ImportError:
     if not DB_PATH.exists():
         st.warning(f"Fallback DB_PATH: {DB_PATH} does not exist. App may not function.")
 
+# Attempt to import the new archive function
+try:
+    from database import archive_all_applied_jobs
+except ImportError:
+    archive_all_applied_jobs = None # Fallback
+    st.error("Could not import archive_all_applied_jobs function from database.py. Archiving will not work.")
+
 
 def fetch_only_applied_jobs_data():
-    """Fetches jobs that have been marked as applied."""
+    """Fetches jobs that have been marked as applied and are NOT archived."""
     if not DB_PATH.exists():
         st.error(f"Database file not found at: {DB_PATH}")
         return pd.DataFrame()
@@ -46,7 +53,7 @@ def fetch_only_applied_jobs_data():
         JOIN
             discovered_jobs dj ON aj.discovered_job_id = dj.id
         WHERE 
-            aj.date_applied IS NOT NULL  -- Key condition: only fetch applied jobs
+            aj.date_applied IS NOT NULL AND (aj.is_archived = FALSE OR aj.is_archived IS NULL) -- Key condition: only fetch applied and not archived jobs
         ORDER BY
             aj.date_applied DESC; -- Order by when applied
         """
@@ -67,12 +74,34 @@ def fetch_only_applied_jobs_data():
         if conn:
             conn.close()
 
+if 'applied_action_message' not in st.session_state:
+    st.session_state.applied_action_message = ""
+
+# --- Sidebar Actions for Applied Jobs ---
+with st.sidebar:
+    st.header("Applied Jobs Actions")
+    if archive_all_applied_jobs: # Check if function was imported
+        if st.button("🗑️ Archive All Applied Jobs", key="archive_all_applied_sidebar_button", help="Mark all currently visible applied jobs as archived.", use_container_width=True, type="primary"):
+            try:
+                archived_count = archive_all_applied_jobs()
+                st.session_state.applied_action_message = f"Successfully archived {archived_count} applied jobs."
+                st.rerun()
+            except Exception as e:
+                st.session_state.applied_action_message = f"Error archiving applied jobs: {e}"
+                st.rerun()
+    else:
+        st.sidebar.error("Archive functionality is unavailable.")
+
 # --- Streamlit Page Layout for "Applied Jobs" ---
 # The global config from 01_Dashboard.py will apply.
 
 st.title("✅ JobFinder - Applied Jobs")
 
-st.markdown("This page lists all jobs that you have marked as 'applied'.")
+if st.session_state.applied_action_message:
+    st.toast(st.session_state.applied_action_message, icon="ℹ️")
+    st.session_state.applied_action_message = "" # Clear message after displaying
+
+st.markdown("This page lists all jobs that you have marked as 'applied' and have not been archived.")
 
 applied_df = fetch_only_applied_jobs_data()
 

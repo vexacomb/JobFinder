@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS approved_jobs (
     date_approved     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     reason            TEXT,
     date_applied      TIMESTAMP NULL, -- Added new column, allow NULL
+    is_archived       BOOLEAN DEFAULT FALSE, -- Added for archiving
     FOREIGN KEY (discovered_job_id)
         REFERENCES discovered_jobs(id) ON DELETE CASCADE
 );
@@ -64,19 +65,17 @@ def init_db() -> None:
         conn.executescript(DDL_APPROVED)   # Create approved_jobs
 
         # Attempt to add the date_applied column to approved_jobs if it doesn't exist
-        # This is a simple way to handle schema migration for this specific column.
         try:
-            # Check if the column exists first to avoid errors on subsequent runs
             cursor = conn.execute("PRAGMA table_info(approved_jobs);")
             columns = [row['name'] for row in cursor.fetchall()]
             if 'date_applied' not in columns:
                 conn.execute("ALTER TABLE approved_jobs ADD COLUMN date_applied TIMESTAMP NULL;")
                 print("Added 'date_applied' column to 'approved_jobs' table.")
+            if 'is_archived' not in columns: # Check and add is_archived
+                conn.execute("ALTER TABLE approved_jobs ADD COLUMN is_archived BOOLEAN DEFAULT FALSE;")
+                print("Added 'is_archived' column to 'approved_jobs' table.")
         except sqlite3.Error as e:
-            # This might happen if the table doesn't exist yet (should be handled by executescript)
-            # or if there's another issue with the ALTER TABLE command.
-            # For a more robust migration system, a dedicated library would be used.
-            print(f"Notice: Could not add 'date_applied' column (may already exist or other issue): {e}")
+            print(f"Notice: Could not add new columns to 'approved_jobs' (may already exist or other issue): {e}")
 
 
 # -- CRUD helpers ------------------------------------------------------------
@@ -212,3 +211,17 @@ def delete_approved_job(approved_job_pk: int) -> bool:
     with get_conn() as conn:
         cur = conn.execute(sql, (approved_job_pk,))
         return cur.rowcount > 0
+
+def archive_all_applied_jobs() -> int:
+    """Marks all applied jobs as archived.
+    Sets is_archived = TRUE for jobs where date_applied is not NULL and is_archived is FALSE.
+    Returns the number of rows updated.
+    """
+    sql = """
+    UPDATE approved_jobs
+    SET is_archived = TRUE
+    WHERE date_applied IS NOT NULL AND (is_archived = FALSE OR is_archived IS NULL);
+    """
+    with get_conn() as conn:
+        cur = conn.execute(sql)
+        return cur.rowcount

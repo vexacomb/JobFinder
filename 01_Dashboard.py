@@ -38,6 +38,7 @@ try:
     from utils import DB_PATH as UTILS_DB_PATH # Use an alias
     DB_PATH = UTILS_DB_PATH # Assign to the global DB_PATH
 
+    from database import init_db # Import init_db
     from database import clear_all_approved_jobs as db_clear_approved
     clear_all_approved_jobs = db_clear_approved
 
@@ -66,6 +67,15 @@ except ImportError as e:
         def delete_approved_job(pk): st.error("delete_approved_job (fallback) not loaded."); return False
     if scrape_phase is None:
         def scrape_phase(): st.error("scrape_phase (fallback) not loaded."); return (0,0)
+
+# Call init_db() to ensure database and tables are created/updated
+if DB_PATH: # Ensure DB_PATH is set before calling
+    try:
+        init_db() # Call init_db here
+    except Exception as e:
+        st.error(f"Database initialization failed: {e}")
+else:
+    st.error("DB_PATH not configured. Database initialization skipped.")
 
 # 4. Now define functions that USE these global variables (like DB_PATH)
 def fetch_approved_jobs():
@@ -142,7 +152,7 @@ else:
         scan_status_placeholder.info(st.session_state.scan_message)
         st.session_state.scan_message = "" 
 
-    if st.sidebar.button("Start New Job Scan", key="global_start_scan"):
+    if st.sidebar.button("🚀 Start New Job Scan", key="global_start_scan", use_container_width=True):
         if scrape_phase: # Check if function is available
             st.session_state.scan_running = True
             st.session_state.scan_message = "Scan initiated..."
@@ -150,7 +160,7 @@ else:
         else:
             st.error("Scan function not available due to import error.")
 
-    if st.sidebar.button("Clear All Approved Jobs", key="global_clear_approved"):
+    if st.sidebar.button("🗑️ Clear All Approved Jobs", key="global_clear_approved", use_container_width=True, type="primary"):
         try:
             deleted_count = clear_all_approved_jobs()
             st.session_state.scan_message = f"Successfully cleared {deleted_count} approved jobs."
@@ -246,21 +256,3 @@ else:
                 st.rerun() # MODIFIED from st.experimental_rerun()
         st.markdown("---")
 
-# --- Sidebar ---
-st.sidebar.header("About JobFinder")
-st.sidebar.info(
-    """
-    **JobFinder v0.2**
-
-    This application helps automate finding and managing job postings.
-
-    **Features:**
-    * Scrapes LinkedIn for jobs.
-    * Uses AI to evaluate job descriptions.
-    * Stores and displays approved jobs.
-    * Allows marking jobs as applied or deleting them.
-
-    ---
-    *Developed by Michael Busbee*
-    """
-)

@@ -63,7 +63,6 @@ st.title("⚙️ JobFinder - Configuration")
 # --- Sidebar Actions ---
 with st.sidebar:
     st.header("Configuration Actions")
-    st.markdown("---")
     if st.button("💾 Save All Settings", key="save_all_settings_sidebar_button", help="Save TOML configuration including API Keys.", use_container_width=True):
         
         # TOML Config Saving (including API Keys)
@@ -97,7 +96,6 @@ with st.sidebar:
             st.warning(f"Could not save configuration: some input fields are not yet available. Missing: {', '.join(missing_keys)}")
         
         st.rerun()
-    st.markdown("---")
 
 
 # --- Load Config Data (TOML) ---
@@ -137,8 +135,7 @@ openai_api_key_val = api_keys_data.get("openai_api_key", "")
 
 
 # --- Editable Fields (Main Page Area) ---
-st.header("🔑 API Keys Management (config.toml)") # Updated header
-st.info(f"API Keys are now stored in the main configuration file: `{CONFIG_FILE_PATH}`") # Updated info message
+st.header("🔑 API Keys Management") # Updated header
 st.text_input(
     "🔑 Google API Key (Gemini)",
     value=google_api_key_val,
@@ -155,14 +152,12 @@ st.text_input(
 )
 st.markdown("---")
 
-st.header("📝 Search Parameters (config.toml)")
+st.header("📝 Search Parameters")
 st.text_area("📍 Locations", value=locations_str_val, height=100, key="locations_text_area")
 st.text_area("🔑 Keywords", value=keywords_str_val, height=150, key="keywords_text_area")
 st.text_area("🚫 Exclusion Keywords", value=exclusions_str_val, height=150, key="exclusions_text_area")
 
-st.header("🧠 AI Evaluation Settings (config.toml)")
-st.text_area("📄 Default Resume Text", value=default_resume_val, height=300, key="default_resume_text_area")
-st.text_area("🤖 AI Evaluation Prompt", value=ai_prompt_val, height=300, key="ai_prompt_text_area")
+st.header("✨ AI Evaluation Settings")
+st.text_area("📄 Resume Text", value=default_resume_val, height=300, key="default_resume_text_area")
+st.text_area("🤖 AI Prompt", value=ai_prompt_val, height=300, key="ai_prompt_text_area")
 
-st.markdown("---")
-st.caption("Note: Changes to configuration (including API Keys) will be used the next time a job scan is initiated or AI evaluation occurs, due to cache clearing on save.")
