@@ -26,11 +26,13 @@ JobFinder is a Python application designed to automate the process of finding re
 
 ## Running the Application
 
-    *Windows:*
+    **Windows:**
+
     ```powershell
     .\run_app.bat
     ```
-    *Linux/macOS:*
+    **Linux/macOS:**
+    
     ```bash
     sudo chmod +x run_app.sh
     ./run_app.sh
