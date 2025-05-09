@@ -4,6 +4,8 @@ import pandas as pd
 from pathlib import Path
 import html
 import time # For potential use with st.empty and messages
+import toml # Added for consistency, though not directly used for DB
+import shutil # For file operations
 
 # 1. Page Config FIRST
 st.set_page_config(
@@ -77,6 +79,89 @@ if DB_PATH: # Ensure DB_PATH is set before calling
 else:
     st.error("DB_PATH not configured. Database initialization skipped.")
 
+# --- Database Schema Validation Function ---
+def get_expected_db_schema():
+    return {
+        "discovered_jobs": {
+            "id": {"type": "INTEGER", "notnull": 0, "pk": 1}, # type can be flexible, check for major ones
+            "job_id": {"type": "INTEGER", "notnull": 1, "pk": 0}, # UNIQUE is not checked by PRAGMA table_info easily
+            "url": {"type": "TEXT", "notnull": 1, "pk": 0},    # UNIQUE is not checked by PRAGMA table_info easily
+            "title": {"type": "TEXT", "notnull": 0, "pk": 0},
+            "description": {"type": "TEXT", "notnull": 0, "pk": 0},
+            "location": {"type": "TEXT", "notnull": 0, "pk": 0},
+            "keyword": {"type": "TEXT", "notnull": 0, "pk": 0},
+            "date_discovered": {"type": "TIMESTAMP", "notnull": 0, "pk": 0}, # Often TEXT
+            "analyzed": {"type": "BOOLEAN", "notnull": 0, "pk": 0} # Often INTEGER
+        },
+        "approved_jobs": {
+            "id": {"type": "INTEGER", "notnull": 0, "pk": 1},
+            "discovered_job_id": {"type": "INTEGER", "notnull": 1, "pk": 0}, # UNIQUE not checked easily
+            "date_approved": {"type": "TIMESTAMP", "notnull": 0, "pk": 0},
+            "reason": {"type": "TEXT", "notnull": 0, "pk": 0},
+            "date_applied": {"type": "TIMESTAMP", "notnull": 0, "pk": 0},
+            "is_archived": {"type": "BOOLEAN", "notnull": 0, "pk": 0}
+        }
+    }
+
+def is_valid_database_schema(db_file_path: Path) -> tuple[bool, str]:
+    expected_schema = get_expected_db_schema()
+    try:
+        conn = sqlite3.connect(db_file_path)
+        cursor = conn.cursor()
+
+        for table_name, expected_columns in expected_schema.items():
+            # Check if table exists
+            cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}';")
+            if not cursor.fetchone():
+                conn.close()
+                return False, f"Table '{table_name}' not found in the uploaded database."
+
+            # Check columns
+            cursor.execute(f"PRAGMA table_info('{table_name}');")
+            actual_columns_info = {row[1]: {"type": str(row[2]).upper(), "notnull": row[3], "pk": row[5]} for row in cursor.fetchall()}
+            
+            for col_name, expected_attrs in expected_columns.items():
+                if col_name not in actual_columns_info:
+                    conn.close()
+                    return False, f"Column '{col_name}' not found in table '{table_name}'."
+                
+                actual_attrs = actual_columns_info[col_name]
+                
+                # Type checking (flexible for SQLite's dynamic typing)
+                # For TIMESTAMP and BOOLEAN, they might be stored as TEXT or INTEGER.
+                # We mainly care if critical types like INTEGER for IDs are respected.
+                # This is a simplified check; more robust type affinity checking could be added.
+                if "INTEGER" in expected_attrs["type"] and "INT" not in actual_attrs["type"]:
+                     pass # Allow for INT, INTEGER, BIGINT etc.
+                elif expected_attrs["type"] != "TIMESTAMP" and expected_attrs["type"] != "BOOLEAN" and \
+                     expected_attrs["type"] not in actual_attrs["type"]: # For TEXT, allow TEXT, VARCHAR etc.
+                    # st.warning(f"Type mismatch for {table_name}.{col_name}: Expected containing '{expected_attrs['type']}', got '{actual_attrs['type']}'. Allowing due to SQLite flexibility.")
+                    pass # Be lenient for now
+
+                if expected_attrs["notnull"] != actual_attrs["notnull"]:
+                    # conn.close() # Commenting out to allow minor schema diffs for now
+                    # return False, f"NOT NULL constraint mismatch for column '{col_name}' in table '{table_name}'. Expected: {expected_attrs['notnull']}, Got: {actual_attrs['notnull']}"
+                    st.warning(f"NOT NULL constraint mismatch for {table_name}.{col_name}. Expected: {expected_attrs['notnull']}, Got: {actual_attrs['notnull']}. Allowing.")
+
+
+                if expected_attrs["pk"] != actual_attrs["pk"]:
+                    conn.close()
+                    return False, f"Primary Key constraint mismatch for column '{col_name}' in table '{table_name}'. Expected: {expected_attrs['pk']}, Got: {actual_attrs['pk']}"
+            
+            # Check if all actual columns are expected (no extra columns)
+            # for actual_col_name in actual_columns_info.keys():
+            #     if actual_col_name not in expected_columns:
+            #         st.warning(f"Warning: Extra column '{actual_col_name}' found in table '{table_name}' in the uploaded database. Allowing.")
+
+
+        conn.close()
+        return True, "Database schema appears valid."
+    except sqlite3.Error as e:
+        return False, f"SQLite error during schema validation: {e}"
+    except Exception as e:
+        return False, f"Unexpected error during schema validation: {e}"
+
+
 # 4. Now define functions that USE these global variables (like DB_PATH)
 def fetch_approved_jobs():
     """Fetches all approved jobs, including their primary key and new date_applied status."""
@@ -138,9 +223,13 @@ if 'scan_message' not in st.session_state:
     st.session_state.scan_message = ""
 if 'action_message' not in st.session_state: # For per-job action feedback
     st.session_state.action_message = {}
+if 'db_import_export_message' not in st.session_state:
+    st.session_state.db_import_export_message = None
+if 'show_db_uploader' not in st.session_state:
+    st.session_state.show_db_uploader = False
 
 # --- Global Actions (Sidebar) ---
-st.sidebar.header("Global Actions")
+st.sidebar.header("Job Management")
 scan_status_placeholder = st.sidebar.empty()
 
 if st.session_state.scan_running:
@@ -186,6 +275,95 @@ if st.session_state.scan_running:
     st.session_state.scan_message = f"Scan complete. New jobs: {new_jobs}. Links examined: {links_examined}."
     st.session_state.scan_running = False
     st.rerun() # MODIFIED from st.experimental_rerun()
+
+# --- Database Import/Export (Sidebar) ---
+st.sidebar.markdown("---")
+st.sidebar.subheader("Database Management")
+
+# Display DB import/export message if it exists
+if st.session_state.db_import_export_message:
+    msg_type = st.session_state.db_import_export_message.get("type", "info")
+    msg_text = st.session_state.db_import_export_message.get("text", "")
+    if msg_type == "success":
+        st.sidebar.success(msg_text)
+    elif msg_type == "error":
+        st.sidebar.error(msg_text)
+    else:
+        st.sidebar.info(msg_text)
+    st.session_state.db_import_export_message = None # Clear after displaying
+
+# Export Database Button
+if DB_PATH and DB_PATH.exists():
+    try:
+        with open(DB_PATH, "rb") as fp:
+            st.sidebar.download_button(
+                label="📤 Export Database",
+                data=fp,
+                file_name="jobfinder_database.db",
+                mime="application/vnd.sqlite3", # Standard mime type for SQLite
+                use_container_width=True,
+                help="Download the current application database."
+            )
+    except Exception as e:
+        st.sidebar.error(f"Error preparing DB for export: {e}")
+else:
+    st.sidebar.download_button(
+        label="📤 Export Database",
+        data=b"", # Empty data
+        file_name="jobfinder_database.db",
+        mime="application/vnd.sqlite3",
+        use_container_width=True,
+        help="Database file not found or DB_PATH not set.",
+        disabled=True
+    )
+
+# Import Database Button
+if st.sidebar.button("📥 Import Database", use_container_width=True, key="show_db_uploader_button", help="Click to upload a database file. This will replace the current database if valid."):
+    st.session_state.show_db_uploader = True
+
+if st.session_state.show_db_uploader:
+    uploaded_db_file = st.sidebar.file_uploader(
+        "Upload database.db file",
+        type=["db"],
+        key="db_file_uploader_widget",
+        label_visibility="collapsed"
+    )
+
+    if uploaded_db_file is not None:
+        temp_dir = Path("temp_db_uploads")
+        temp_dir.mkdir(exist_ok=True)
+        temp_upload_path = temp_dir / uploaded_db_file.name
+
+        try:
+            with open(temp_upload_path, "wb") as f:
+                f.write(uploaded_db_file.getvalue())
+            
+            is_valid, message = is_valid_database_schema(temp_upload_path)
+            
+            if is_valid:
+                if DB_PATH:
+                    shutil.move(temp_upload_path, DB_PATH) # Replace current DB
+                    st.session_state.db_import_export_message = {"type": "success", "text": "Database imported successfully!"}
+                     # Clear relevant caches or trigger re-initialization if needed
+                    if load_main_config: load_main_config.cache_clear() # Example: clear config cache
+                    # Potentially re-initialize parts of the app or just rerun
+                else:
+                    st.session_state.db_import_export_message = {"type": "error", "text": "DB_PATH not configured. Cannot save imported database."}
+            else:
+                st.session_state.db_import_export_message = {"type": "error", "text": f"Invalid DB schema: {message}"}
+                if temp_upload_path.exists(): temp_upload_path.unlink() # Clean up invalid file
+
+        except Exception as e:
+            st.session_state.db_import_export_message = {"type": "error", "text": f"Error processing uploaded DB: {e}"}
+            if temp_upload_path.exists(): temp_upload_path.unlink()
+        finally:
+            st.session_state.show_db_uploader = False
+            if temp_dir.exists():
+                try:
+                    shutil.rmtree(temp_dir) # Clean up temp directory
+                except Exception as e_clean:
+                    st.warning(f"Could not clean up temp_db_uploads: {e_clean}")
+            st.rerun()
 
 st.title("📋 JobFinder - Approved Jobs Dashboard")
 
