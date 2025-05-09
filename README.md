@@ -2,20 +2,6 @@
 
 JobFinder is a Python application designed to automate the process of finding relevant job postings from LinkedIn. It scrapes job listings, uses AI (Google Gemini) to evaluate them against your defined criteria and resume, and then presents approved jobs in an interactive web dashboard where you can manage them.
 
-## Features
-
-*   Automated job scraping from LinkedIn based on configurable keywords and locations.
-*   AI-powered evaluation of job descriptions for eligibility.
-*   Web-based dashboard (built with Streamlit) to:
-    *   View and manage approved job postings.
-    *   Mark jobs as "applied."
-    *   View a separate list of applied-to jobs.
-    *   Edit search parameters, AI prompts, and your default resume via a configuration page.
-    *   Initiate new job scans.
-    *   Clear outdated job data.
-*   Local SQLite database for persisting job information.
-*   Automated setup process for virtual environment and dependencies.
-
 ## Prerequisites
 
 *   Python 3.8 or newer.
