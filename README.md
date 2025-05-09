@@ -26,18 +26,18 @@ JobFinder is a Python application designed to automate the process of finding re
 
 ## Running the Application
 
-    ### Windows
+### Windows
 
-    ```powershell
-    .\run_app.bat
-    ```
-    ### Linux \ MacOS
-    
-    ```bash
-    sudo chmod +x run_app.sh
-    ./run_app.sh
-    ```
+```powershell
+.\run_app.bat
+```
 
+### Linux \ MacOS
+
+```bash
+sudo chmod +x run_app.sh
+./run_app.sh
+```
 
 Either method will launch the JobFinder Streamlit web dashboard in your default web browser (typically at `http://localhost:8501`).
 
