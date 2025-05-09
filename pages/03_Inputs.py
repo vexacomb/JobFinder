@@ -50,6 +50,9 @@ def get_default_config_structure() -> dict: # Updated default structure
         "api_keys": { # Added API keys section
             "google_api_key": "YOUR_GOOGLE_API_KEY_HERE",
             "openai_api_key": "YOUR_OPENAI_API_KEY_HERE"
+        },
+        "general": { # ADDED
+            "ai_provider": "gemini" # ADDED
         }
     }
 
@@ -105,6 +108,19 @@ def is_valid_config_structure(imported_data: dict) -> tuple[bool, str]:
         if not isinstance(api_keys_imported[api_key_name], str):
             return False, f"API key '{api_key_name}' must be a string."
             
+    # General Settings # ADDED
+    if "general" not in imported_data or not isinstance(imported_data["general"], dict): # ADDED
+        return False, "Missing 'general' section or it's not a dictionary." # ADDED
+    general_imported = imported_data["general"] # ADDED
+    general_default = default_structure["general"] # ADDED
+    for general_key_name in general_default.keys(): # ADDED
+        if general_key_name not in general_imported: # ADDED
+            return False, f"Missing setting '{general_key_name}' in 'general' section." # ADDED
+        if not isinstance(general_imported[general_key_name], str): # ADDED
+            return False, f"Setting '{general_key_name}' in 'general' section must be a string." # ADDED
+        if general_key_name == "ai_provider" and general_imported[general_key_name] not in ["gemini", "openai"]: # ADDED
+             return False, "ai_provider in general section must be either 'gemini' or 'openai'." # ADDED
+            
     return True, "Configuration structure is valid."
 
 
@@ -118,13 +134,30 @@ st.title("⚙️ JobFinder - Configuration")
 # --- Sidebar Actions ---
 with st.sidebar:
     st.header("Configuration Actions")
+
+    # --- AI Provider Selection --- ADDED SECTION
+    st.subheader("AI Settings") # ADDED
+    current_config_for_radio = load_config_data(CONFIG_FILE_PATH) # ADDED
+    current_ai_provider = current_config_for_radio.get("general", {}).get("ai_provider", "gemini") # ADDED
+    ai_provider_options = ["gemini", "openai"] # ADDED
+    
+    selected_ai_provider = st.radio( # ADDED
+        "Choose AI Provider:", # ADDED
+        options=ai_provider_options, # ADDED
+        index=ai_provider_options.index(current_ai_provider) if current_ai_provider in ai_provider_options else 0, # ADDED
+        key="ai_provider_select", # ADDED
+        help="Select the AI provider for job evaluation. This setting is saved when you click 'Save All Settings'." # ADDED
+    ) # ADDED
+    st.markdown("---") # ADDED
+
     if st.button("💾 Save All Settings", key="save_all_settings_sidebar_button", help="Save TOML configuration including API Keys.", use_container_width=True):
         
         # TOML Config Saving (including API Keys)
         required_toml_keys = [
             "locations_text_area", "keywords_text_area", 
             "exclusions_text_area", "default_resume_text_area", 
-            "ai_prompt_text_area", "google_api_key_input", "openai_api_key_input"
+            "ai_prompt_text_area", "google_api_key_input", "openai_api_key_input",
+            "ai_provider_select" # ADDED
         ]
         if all(k in st.session_state for k in required_toml_keys):
             updated_config_data = {
@@ -142,6 +175,9 @@ with st.sidebar:
                 "api_keys": {
                     "google_api_key": st.session_state.google_api_key_input,
                     "openai_api_key": st.session_state.openai_api_key_input
+                },
+                "general": { # ADDED
+                    "ai_provider": st.session_state.ai_provider_select # ADDED
                 }
             }
             save_config_data(CONFIG_FILE_PATH, updated_config_data) # CONFIG_FILE_PATH from utils

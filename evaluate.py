@@ -122,31 +122,30 @@ def call_gemini(prompt: str, temperature: float = 0) -> dict:
 def analyze_job(
     job_description: str,
     resume: str | None = default_resume,
-    provider: str = "gemini",
     temperature: float = 0,
 ) -> Dict[str, Any]:
 
     prompt = prompt_eligibility(job_description, resume)
 
-    # Ensure config is loaded to get API keys if needed by call_openai or call_gemini
-    # The functions themselves will handle fetching the keys from the loaded config.
-    # config.load.cache_clear() # This should be called elsewhere, e.g., after saving in UI
-    # load() # Ensure config is loaded if not already
+    # Load the latest configuration to determine the AI provider
+    current_config = load() # ADDED to load fresh config
+    provider_to_use = current_config.get("general", {}).get("ai_provider", "gemini").lower() # ADDED
 
     call: Callable[[str, float], Dict[str, Any]]
-    if provider.lower() == "openai":
+    if provider_to_use == "openai": # MODIFIED
         # Configure OpenAI API key before making a call
-        current_config = load()
+        # current_config = load() # No need to load again, already loaded above
         openai_api_key = current_config.get("api_keys", {}).get("openai_api_key")
         if not openai_api_key or openai_api_key == "YOUR_OPENAI_API_KEY_HERE":
             raise ValueError("OpenAI API Key not configured in config.toml or is a placeholder.")
         openai.api_key = openai_api_key # Set the API key for the openai module
         call = call_openai
-    elif provider.lower() == "gemini":
+    elif provider_to_use == "gemini": # MODIFIED
         # Gemini configuration is handled within call_gemini itself to ensure it happens just before model instantiation
         call = call_gemini
     else:
-        raise ValueError("provider must be 'openai' or 'gemini'")
+        # raise ValueError("provider must be 'openai' or 'gemini'") # MODIFIED error message
+        raise ValueError(f"Invalid AI provider configured: '{provider_to_use}'. Must be 'openai' or 'gemini'.") # MODIFIED
 
     return call(prompt, temperature)
 
@@ -154,10 +153,9 @@ def analyze_job(
 def batch_analyse_jobs(
     job_descriptions: List[str],
     resume: str | None = None,
-    provider: str = "openai",
     temperature: float = 0,
 ) -> List[Dict[str, Any]]:
     return [
-        analyse_job(desc, resume=resume, provider=provider, temperature=temperature)
+        analyze_job(desc, resume=resume, temperature=temperature) # MODIFIED
         for desc in job_descriptions
     ]
