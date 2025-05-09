@@ -3,11 +3,11 @@
 from pathlib import Path
 import sqlite3
 from contextlib import contextmanager
-from typing import Iterable, Dict, Any
+from typing import Iterable, Dict, Any, Optional, Tuple, List
 from scrape import _JOB_ID_RE
+from utils import DB_PATH
 
 # -- DB location -------------------------------------------------------------
-DB_PATH = Path(__file__).with_suffix(".db")  # <project>/jobfinder.db
 
 
 # -- connection helpers ------------------------------------------------------

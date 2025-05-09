@@ -5,20 +5,67 @@ from pathlib import Path
 import html
 import time # For potential use with st.empty and messages
 
-# Try to import functions from other project modules
-try:
-    from database import DB_PATH, clear_all_approved_jobs, mark_job_as_applied, delete_approved_job
-    from scrape import scrape_phase
-except ImportError as e:
-    st.error(f"Failed to import necessary modules: {e}")
-    DB_PATH = Path(__file__).resolve().parent / "database.db" 
-    def clear_all_approved_jobs(): st.error("clear_all_approved_jobs function not loaded."); return 0
-    def scrape_phase(): st.error("scrape_phase function not loaded."); return (0,0)
-    def mark_job_as_applied(pk): st.error("mark_job_as_applied not loaded."); return False
-    def delete_approved_job(pk): st.error("delete_approved_job not loaded."); return False
+# 1. Page Config FIRST
+st.set_page_config(
+    page_title="JobFinder Application", # A more global title
+    layout="wide",
+    initial_sidebar_state="expanded" # Optional: to have sidebar open by default
+)
 
+# 2. Standard Python Imports
+import sqlite3
+import pandas as pd
+from pathlib import Path
+import html
+import time # For potential use with st.empty and messages
+
+# 3. Define DB_PATH and other critical global-like variables from your modules.
+#    Handle imports carefully.
+DB_PATH = None # Initialize to None
+scrape_phase = None
+clear_all_approved_jobs = None
+mark_job_as_applied = None
+delete_approved_job = None
+
+try:
+    from utils import DB_PATH as UTILS_DB_PATH # Use an alias
+    DB_PATH = UTILS_DB_PATH # Assign to the global DB_PATH
+
+    from database import clear_all_approved_jobs as db_clear_approved
+    clear_all_approved_jobs = db_clear_approved
+
+    from database import mark_job_as_applied as db_mark_applied
+    mark_job_as_applied = db_mark_applied
+
+    from database import delete_approved_job as db_delete_approved
+    delete_approved_job = db_delete_approved
+    
+    from scrape import scrape_phase as sp_scrape_phase
+    scrape_phase = sp_scrape_phase
+
+except ImportError as e:
+    st.error(f"Critical Error: Failed to import core modules or paths: {e}. Application functionality will be severely limited.")
+    # Define fallbacks for ALL imported names if an import fails
+    if DB_PATH is None: # If utils.DB_PATH failed to import
+        DB_PATH = Path(__file__).resolve().parent / "fallback_database.db" 
+        st.warning(f"Using fallback database path: {DB_PATH}")
+
+    # Fallback dummy functions if their imports failed
+    if clear_all_approved_jobs is None:
+        def clear_all_approved_jobs(): st.error("clear_all_approved_jobs (fallback) not loaded."); return 0
+    if mark_job_as_applied is None:
+        def mark_job_as_applied(pk): st.error("mark_job_as_applied (fallback) not loaded."); return False
+    if delete_approved_job is None:
+        def delete_approved_job(pk): st.error("delete_approved_job (fallback) not loaded."); return False
+    if scrape_phase is None:
+        def scrape_phase(): st.error("scrape_phase (fallback) not loaded."); return (0,0)
+
+# 4. Now define functions that USE these global variables (like DB_PATH)
 def fetch_approved_jobs():
     """Fetches all approved jobs, including their primary key and new date_applied status."""
+    if not DB_PATH: # Check if DB_PATH was successfully initialized
+        st.error("DB_PATH is not configured. Cannot fetch jobs.")
+        return pd.DataFrame()
     if not DB_PATH.exists():
         st.error(f"Database file not found at: {DB_PATH}")
         return pd.DataFrame()
@@ -67,10 +114,6 @@ def fetch_approved_jobs():
         if conn:
             conn.close()
 
-# --- Streamlit App Layout ---
-st.set_page_config(page_title="JobFinder Dashboard", layout="wide")
-st.title("JobFinder - Main Dashboard")
-
 # Initialize session state
 if 'scan_running' not in st.session_state:
     st.session_state.scan_running = False
@@ -93,9 +136,12 @@ else:
         st.session_state.scan_message = "" 
 
     if st.sidebar.button("Start New Job Scan", key="global_start_scan"):
-        st.session_state.scan_running = True
-        st.session_state.scan_message = "Scan initiated..."
-        st.rerun() # MODIFIED from st.experimental_rerun()
+        if scrape_phase: # Check if function is available
+            st.session_state.scan_running = True
+            st.session_state.scan_message = "Scan initiated..."
+            st.rerun() 
+        else:
+            st.error("Scan function not available due to import error.")
 
     if st.sidebar.button("Clear All Approved Jobs", key="global_clear_approved"):
         try:
@@ -112,9 +158,9 @@ if st.session_state.scan_running:
     st.session_state.scan_running = False
     st.rerun() # MODIFIED from st.experimental_rerun()
 
+st.title("📋 JobFinder - Approved Jobs Dashboard")
+
 # --- Display Approved Jobs ---
-st.markdown("---")
-st.header("Approved Job Postings")
 
 action_message_placeholder = st.empty() 
 if st.session_state.action_message:

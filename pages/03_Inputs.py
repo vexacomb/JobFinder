@@ -1,7 +1,8 @@
 import streamlit as st
 from pathlib import Path
 import toml
-from dotenv import get_key, set_key, find_dotenv # For .env file manipulation
+from dotenv import get_key, set_key, find_dotenv # find_dotenv is no longer needed here directly for path
+from utils import CONFIG_FILE_PATH, ENV_FILE_PATH # MODIFIED: Import from utils.py
 
 # --- File Paths ---
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -81,8 +82,7 @@ def save_env_vars(env_path: Path, vars_to_save: dict):
         return False
 
 # --- Streamlit Page Layout for "Inputs" ---
-st.set_page_config(page_title="JobFinder Inputs", layout="wide")
-st.title("⚙️ JobFinder - Configuration & API Keys")
+st.title("⚙️ JobFinder - Configuration")
 
 
 # --- Sidebar Actions ---
@@ -157,8 +157,8 @@ google_api_key_val = env_vars.get("GOOGLE_API_KEY", "")
 openai_api_key_val = env_vars.get("OPENAI_API_KEY", "") # If you add OpenAI
 
 # --- Editable Fields (Main Page Area) ---
-st.header("API Keys Management")
-st.info(f"API Keys are stored in the `.env` file at: `{ENV_FILE_PATH}`. The application needs to be restarted for changes to be fully active in background processes.")
+st.header("🔑 API Keys Management")
+st.info(f"API Keys are stored in the `.env` file. When running as a packaged app, this file should be alongside the executable. Path: `{ENV_FILE_PATH}`")
 st.text_input(
     "🔑 Google API Key (Gemini)",
     value=google_api_key_val,
@@ -176,13 +176,13 @@ st.text_input(
 # )
 st.markdown("---")
 
-st.header("Search Parameters (config.toml)")
+st.header("📝 Search Parameters (config.toml)")
 # (Text areas for locations, keywords, exclusions as before, using their respective _val and keys)
 st.text_area("📍 Locations", value=locations_str_val, height=100, key="locations_text_area")
 st.text_area("🔑 Keywords", value=keywords_str_val, height=150, key="keywords_text_area")
 st.text_area("🚫 Exclusion Keywords", value=exclusions_str_val, height=150, key="exclusions_text_area")
 
-st.header("AI Evaluation Settings (config.toml)")
+st.header("🧠 AI Evaluation Settings (config.toml)")
 # (Text areas for default_resume, ai_prompt as before, using their respective _val and keys)
 st.text_area("📄 Default Resume Text", value=default_resume_val, height=300, key="default_resume_text_area")
 st.text_area("🤖 AI Evaluation Prompt", value=ai_prompt_val, height=300, key="ai_prompt_text_area")

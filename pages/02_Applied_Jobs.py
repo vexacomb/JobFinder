@@ -13,9 +13,9 @@ try:
     # This assumes dashboard.py (and thus its directory) is the root for finding database.py
     # If running `streamlit run dashboard.py`, then relative paths from dashboard.py are key.
     # For pages, Streamlit sets the CWD to the project root.
-    from database import DB_PATH 
+    from utils import DB_PATH 
 except ImportError:
-    st.error("Error: Could not import DB_PATH from database.py. Ensure project structure and PYTHONPATH are correct.")
+    st.error("Error: Could not import DB_PATH from utils.py.")
     # Fallback, assuming 'pages' is one level down from project root where database.db is
     DB_PATH = Path(__file__).resolve().parent.parent / "database.db"
     if not DB_PATH.exists():
@@ -68,9 +68,9 @@ def fetch_only_applied_jobs_data():
             conn.close()
 
 # --- Streamlit Page Layout for "Applied Jobs" ---
-st.set_page_config(page_title="Applied Jobs", layout="wide") # Config for this specific page
+# The global config from 01_Dashboard.py will apply.
 
-st.title("JobFinder - Applied Job Postings")
+st.title("✅ JobFinder - Applied Jobs")
 
 st.markdown("This page lists all jobs that you have marked as 'applied'.")
 

@@ -1,14 +1,17 @@
 # config.py
 from pathlib import Path
 from functools import lru_cache
+from utils import CONFIG_FILE_PATH # MODIFIED: Import from utils.py
 
 try:
-    import tomllib            # Python 3.11+
-except ModuleNotFoundError:    # 3.8–3.10
-    import tomli as tomllib    # pip install tomli
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 
 @lru_cache(maxsize=1)
-def load(path: str | Path = "config.toml") -> dict:
+def load(path: Path = CONFIG_FILE_PATH) -> dict: # MODIFIED: Default path from utils
     """Load and cache the TOML config."""
-    with Path(path).expanduser().open("rb") as f:
+    # The expanduser() might not be relevant if path is always absolute from utils.py
+    # but doesn't hurt.
+    with path.expanduser().open("rb") as f: 
         return tomllib.load(f)
