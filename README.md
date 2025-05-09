@@ -26,23 +26,11 @@ JobFinder is a Python application designed to automate the process of finding re
 
 1.  **Clone the Repository:**
     ```bash
-    git clone https://github.com/vexacomb/JobFinder.git
+    git clone https://github.com/mbusbee505/JobFinder.git
     cd JobFinder
     ```
 
-2.  **Set up API Key:**
-    *   The application requires a Google API Key for the Gemini AI model to evaluate job descriptions.
-    *   You need to make this key available to the application. The `env.py` file is intended for this.
-    *   Create or ensure `env.py` exists in the project root and set your `GOOGLE_API_KEY` within it:
-        ```python
-        # env.py
-        GOOGLE_API_KEY = "YOUR_ACTUAL_GOOGLE_API_KEY_HERE"
-        # You can also add OPENAI_API_KEY if you plan to use OpenAI models
-        # OPENAI_API_KEY = "YOUR_OPENAI_API_KEY_HERE"
-        ```
-    *   Alternatively, you can set it as an environment variable in your system. The application (specifically `evaluate.py`) will try to load it.
-
-3.  **Run the Setup Script:**
+2.  **Run the Setup Script:**
     This script will create a Python virtual environment (`.venv/`), install all required dependencies into it, and initialize the local SQLite database (`database.db`).
     ```bash
     python setup.py
@@ -52,18 +40,6 @@ JobFinder is a Python application designed to automate the process of finding re
 
 ## Running the Application
 
-Once the setup is complete, you have two primary ways to run the JobFinder application:
-
-**Option 1: Using the provided runner scripts (recommended for ease of use):**
-
-*   **On Windows:** Double-click `run_app.bat` in the project's root directory.
-*   **On Linux/macOS:** Open your terminal in the project's root directory and run:
-    ```bash
-    chmod +x run_app.sh  # Run this once to make the script executable
-    ./run_app.sh
-    ```
-
-**Option 2: Manually using `python main.py` (after activating the virtual environment):**
 
 1.  **Activate the virtual environment:**
     *   On Windows (PowerShell):
@@ -118,8 +94,4 @@ The JobFinder dashboard provides several pages accessible via the sidebar naviga
 
 To stop the JobFinder application, go to the terminal window where it's running (either the one launched by the runner scripts or the one where you ran `python main.py`) and press `Ctrl+C`.
 
-## Troubleshooting
 
-*   **`ModuleNotFoundError`:** Ensure you have run `python setup.py` successfully and that you are running the application using the virtual environment (either via the runner scripts or by activating it manually before `python main.py`).
-*   **API Key Errors:** Double-check that your `GOOGLE_API_KEY` is correctly set in `env.py` or as an environment variable.
-*   **Streamlit Errors:** If the dashboard doesn't launch, check the terminal for error messages from Streamlit.
