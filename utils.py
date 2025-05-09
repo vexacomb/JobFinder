@@ -21,6 +21,7 @@ def get_application_path() -> Path:
 # Define common paths based on the application path
 APP_ROOT = get_application_path()
 CONFIG_FILE_PATH = APP_ROOT / "config.toml"
+EXAMPLE_CONFIG_FILE_PATH = APP_ROOT / "example_config.toml"
 # ENV_FILE_PATH = APP_ROOT / ".env" # .env file is no longer primary for API keys
 DB_PATH = APP_ROOT / "database.db" # Assuming database.db is also in the root
 
@@ -30,5 +31,6 @@ DB_PATH = APP_ROOT / "database.db" # Assuming database.db is also in the root
 if __name__ == '__main__':
     print(f"Application Root: {APP_ROOT}")
     print(f"Config File Path: {CONFIG_FILE_PATH}")
+    print(f"Example Config File Path: {EXAMPLE_CONFIG_FILE_PATH}")
     # print(f"Env File Path: {ENV_FILE_PATH}") # Commented out as ENV_FILE_PATH is removed
     print(f"Database Path: {DB_PATH}")

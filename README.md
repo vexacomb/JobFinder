@@ -40,21 +40,16 @@ JobFinder is a Python application designed to automate the process of finding re
 
 ## Running the Application
 
-
-1.  **Activate the virtual environment:**
     *   Windows:
         ```powershell
-        .\.venv\Scripts\activate
+        .\run_app.bat
         ```
     *   Linux/macOS:
         ```bash
-        source .venv/bin/activate
+        sudo chmod +x run_app.sh
+        ./run_app.sh
         ```
-2.  **Run the application:**
-    Once the virtual environment is active (your terminal prompt should change), run:
-    ```bash
-    python main.py
-    ```
+
 
 Either method will launch the JobFinder Streamlit web dashboard in your default web browser (typically at `http://localhost:8501`).
 

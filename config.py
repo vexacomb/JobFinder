@@ -1,7 +1,8 @@
 # config.py
 from pathlib import Path
 from functools import lru_cache
-from utils import CONFIG_FILE_PATH # MODIFIED: Import from utils.py
+import shutil # ADDED
+from utils import CONFIG_FILE_PATH, EXAMPLE_CONFIG_FILE_PATH # MODIFIED: Import from utils.py
 
 try:
     import tomllib
@@ -36,17 +37,30 @@ def save_config(config_data: dict, path: Path = CONFIG_FILE_PATH):
     with path.expanduser().open("w", encoding="utf-8") as f: # Open in text mode for toml.dump
         toml.dump(config_data, f)
 
-def create_default_config_if_not_exists(path: Path = CONFIG_FILE_PATH):
-    """Creates a default config.toml file if it doesn't already exist."""
+def create_config_if_not_exists(path: Path = CONFIG_FILE_PATH): # RENAMED function for clarity
+    """Ensures config.toml exists.
+    1. If config.toml exists, do nothing.
+    2. If config.toml does not exist, try to copy example_config.toml to config.toml.
+    3. If example_config.toml also does not exist, create config.toml from hardcoded defaults.
+    """
     if not path.expanduser().exists():
-        print(f"config.toml not found at {path}. Creating a default config.toml.")
-        save_config(DEFAULT_CONFIG, path)
-        print(f"Default config.toml created at {path}. Please review and update it as needed.")
+        if EXAMPLE_CONFIG_FILE_PATH.expanduser().exists():
+            try:
+                shutil.copy2(EXAMPLE_CONFIG_FILE_PATH, path)
+                print(f"'{path.name}' not found. Copied '{EXAMPLE_CONFIG_FILE_PATH.name}' to '{path.name}'.")
+            except Exception as e:
+                print(f"Error copying '{EXAMPLE_CONFIG_FILE_PATH.name}' to '{path.name}': {e}. Falling back to default config.")
+                save_config(DEFAULT_CONFIG, path)
+                print(f"Default '{path.name}' created at {path}. Please review and update it as needed.")
+        else:
+            print(f"'{path.name}' not found. '{EXAMPLE_CONFIG_FILE_PATH.name}' also not found. Creating default '{path.name}'.")
+            save_config(DEFAULT_CONFIG, path)
+            print(f"Default '{path.name}' created at {path}. Please review and update it as needed.")
 
 @lru_cache(maxsize=1)
 def load(path: Path = CONFIG_FILE_PATH) -> dict:
     """Load and cache the TOML config. Ensures defaults are used if file is empty or malformed."""
-    create_default_config_if_not_exists(path) # Ensures file exists if it was missing
+    create_config_if_not_exists(path) # MODIFIED: Call renamed function
 
     try:
         with path.expanduser().open("rb") as f:
