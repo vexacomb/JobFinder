@@ -208,7 +208,7 @@ if st.session_state.action_message:
 approved_jobs_df = fetch_approved_jobs()
 
 if approved_jobs_df.empty:
-    st.warning("No approved jobs found in the database, or an error occurred fetching them.")
+    st.warning("No approved jobs found in the database. Click Start New Job Scan to begin.")
 else:
     st.metric(label="Total Approved Jobs", value=len(approved_jobs_df))
     st.markdown("---")

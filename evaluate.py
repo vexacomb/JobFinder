@@ -16,9 +16,10 @@ from google.generativeai import types as gen_types
 
 
 config = load()
-print(f"DEBUG: Loaded config keys: {config.keys()}")
+# print(f"DEBUG: Loaded config keys: {config.keys()}")
 if 'search_parameters' in config:
-    print(f"DEBUG: search_parameters keys: {config['search_parameters'].keys()}")
+    # print(f"DEBUG: search_parameters keys: {config['search_parameters'].keys()}")
+    locations = config['search_parameters'].get('locations', [])
 else:
     print("DEBUG: search_parameters key NOT FOUND in config")
 exclusions = config["search_parameters"]["exclusion_keywords"]

@@ -53,6 +53,61 @@ def get_default_config_structure() -> dict: # Updated default structure
         }
     }
 
+# --- Validation for Imported Config ---
+def is_valid_config_structure(imported_data: dict) -> tuple[bool, str]:
+    default_structure = get_default_config_structure()
+    
+    # Check top-level keys
+    for key in default_structure.keys():
+        if key not in imported_data:
+            return False, f"Missing top-level key: '{key}'"
+        if not isinstance(imported_data[key], type(default_structure[key])):
+            return False, f"Invalid type for top-level key '{key}'. Expected {type(default_structure[key]).__name__}, got {type(imported_data[key]).__name__}."
+
+    # Check nested structures and types
+    # Search Parameters
+    sp_default = default_structure["search_parameters"]
+    sp_imported = imported_data["search_parameters"]
+    for sp_key in sp_default.keys():
+        if sp_key not in sp_imported:
+            return False, f"Missing key in 'search_parameters': '{sp_key}'"
+        if not isinstance(sp_imported[sp_key], list):
+             return False, f"Key '{sp_key}' in 'search_parameters' should be a list."
+        if not all(isinstance(item, str) for item in sp_imported[sp_key]):
+            return False, f"All items in '{sp_key}' under 'search_parameters' should be strings."
+
+    # Resume
+    if "resume" not in imported_data or not isinstance(imported_data["resume"], dict):
+        return False, "Missing 'resume' section or it's not a dictionary."
+    resume_imported = imported_data["resume"]
+    if "text" not in resume_imported:
+        return False, "Missing 'text' key in 'resume' section."
+    if not isinstance(resume_imported["text"], str):
+        return False, "'resume.text' must be a string."
+
+    # Prompts
+    if "prompts" not in imported_data or not isinstance(imported_data["prompts"], dict):
+        return False, "Missing 'prompts' section or it's not a dictionary."
+    prompts_imported = imported_data["prompts"]
+    if "evaluation_prompt" not in prompts_imported:
+        return False, "Missing 'evaluation_prompt' key in 'prompts' section."
+    if not isinstance(prompts_imported["evaluation_prompt"], str):
+        return False, "'prompts.evaluation_prompt' must be a string."
+
+    # API Keys
+    if "api_keys" not in imported_data or not isinstance(imported_data["api_keys"], dict):
+        return False, "Missing 'api_keys' section or it's not a dictionary."
+    api_keys_imported = imported_data["api_keys"]
+    api_keys_default = default_structure["api_keys"]
+    for api_key_name in api_keys_default.keys():
+        if api_key_name not in api_keys_imported:
+            return False, f"Missing API key '{api_key_name}' in 'api_keys' section."
+        if not isinstance(api_keys_imported[api_key_name], str):
+            return False, f"API key '{api_key_name}' must be a string."
+            
+    return True, "Configuration structure is valid."
+
+
 # --- Helper functions for .env file ---
 # Removing load_env_vars and save_env_vars as API keys are now in config.toml
 
@@ -96,6 +151,72 @@ with st.sidebar:
             st.warning(f"Could not save configuration: some input fields are not yet available. Missing: {', '.join(missing_keys)}")
         
         st.rerun()
+
+    # Export Button (Moved Before Import)
+    try:
+        with open(CONFIG_FILE_PATH, "r", encoding="utf-8") as f:
+            config_content_for_export = f.read()
+        st.download_button(
+            label="📤 Export Configuration",
+            data=config_content_for_export,
+            file_name="jobfinder_config.toml", 
+            mime="application/toml",
+            use_container_width=True,
+            help="Download the current configuration as a TOML file."
+        )
+    except FileNotFoundError:
+        st.warning(f"`{CONFIG_FILE_PATH.name}` not found. Save settings first to create it.")
+    except Exception as e:
+        st.error(f"Could not read config for export: {e}")
+
+    # --- Import Configuration ---
+    # Initialize session state for uploader visibility
+    if 'show_config_uploader' not in st.session_state:
+        st.session_state.show_config_uploader = False
+
+    if st.button("📥 Import Configuration", use_container_width=True, key="show_config_uploader_button", help="Click to reveal the uploader, then select a TOML configuration file."):
+        st.session_state.show_config_uploader = True
+        # No st.rerun() here, the script will continue and render the uploader if state is True
+
+    if st.session_state.show_config_uploader:
+        uploaded_file = st.file_uploader(
+            "Upload Configuration File", # Label text (will be hidden by label_visibility)
+            type=["toml"],
+            key="config_file_uploader_widget", # Ensure a unique key for the widget itself
+            help="Upload a TOML configuration file. This will overwrite current settings if valid.",
+            label_visibility="collapsed"
+        )
+
+        if uploaded_file is not None:
+            try:
+                imported_content = uploaded_file.getvalue().decode("utf-8")
+                imported_data = toml.loads(imported_content)
+                
+                is_valid, message = is_valid_config_structure(imported_data)
+                
+                if is_valid:
+                    save_config_data(CONFIG_FILE_PATH, imported_data)
+                    st.session_state.config_just_saved_inputs_page = True # Trigger reload logic
+                    st.success("Configuration imported successfully and saved!")
+                    st.session_state.import_error_message = None # Clear any previous error upon success
+                else:
+                    # Store the specific validation error message in session state
+                    st.session_state.import_error_message = f"Invalid configuration file: {message}"
+            except toml.TomlDecodeError:
+                st.session_state.import_error_message = "Invalid TOML format in the uploaded file."
+            except Exception as e:
+                st.session_state.import_error_message = f"Error processing uploaded file: {e}"
+            finally:
+                # Hide the uploader and rerun whether successful or not
+                st.session_state.show_config_uploader = False
+                # Clear the uploaded file from the uploader's internal state by changing its key or rerunning.
+                # Forcing a rerun is simpler to ensure fresh state.
+                st.rerun() 
+
+    # MOVED HERE: Display import error message AFTER import button and all its processing
+    if "import_error_message" in st.session_state and st.session_state.import_error_message:
+        st.error(st.session_state.import_error_message)
+        st.session_state.import_error_message = None # Clear after displaying
 
 
 # --- Load Config Data (TOML) ---

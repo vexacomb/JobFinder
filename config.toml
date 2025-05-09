@@ -1,5 +1,5 @@
 [search_parameters]
-locations = [ "Remote",]
+locations = [ "another tests",]
 keywords = [ "Software Engineer", "Python Developer",]
 exclusion_keywords = [ "Senior", "Sr.", "Lead", "Manager",]
 
