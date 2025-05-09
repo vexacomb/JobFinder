@@ -54,6 +54,16 @@ CREATE TABLE IF NOT EXISTS approved_jobs (
 );
 """
 
+DDL_SCAN_CONTROL = """
+CREATE TABLE IF NOT EXISTS scan_control (
+    id INTEGER PRIMARY KEY CHECK (id = 1), -- Ensures only one row
+    stop_requested BOOLEAN DEFAULT FALSE
+);
+"""
+
+SQL_INIT_SCAN_CONTROL = """
+INSERT OR IGNORE INTO scan_control (id, stop_requested) VALUES (1, FALSE);
+"""
 
 
 def init_db() -> None:
@@ -63,6 +73,8 @@ def init_db() -> None:
     with get_conn() as conn:
         conn.executescript(DDL_DISCOVERED) # Create discovered_jobs first
         conn.executescript(DDL_APPROVED)   # Create approved_jobs
+        conn.executescript(DDL_SCAN_CONTROL) # Create scan_control table
+        conn.execute(SQL_INIT_SCAN_CONTROL)  # Ensure the control row exists
 
         # Attempt to add the date_applied column to approved_jobs if it doesn't exist
         try:
@@ -225,3 +237,23 @@ def archive_all_applied_jobs() -> int:
     with get_conn() as conn:
         cur = conn.execute(sql)
         return cur.rowcount
+
+# --- Scan Control Functions ---
+
+def set_stop_scan_flag(stop: bool) -> None:
+    """Sets the global scan stop flag in the database."""
+    sql = "UPDATE scan_control SET stop_requested = ? WHERE id = 1;"
+    with get_conn() as conn:
+        conn.execute(sql, (stop,))
+
+def should_stop_scan() -> bool:
+    """Checks the global scan stop flag in the database.
+    Returns True if a stop is requested, False otherwise.
+    """
+    sql = "SELECT stop_requested FROM scan_control WHERE id = 1;"
+    with get_conn() as conn:
+        cur = conn.execute(sql)
+        row = cur.fetchone()
+        if row:
+            return bool(row["stop_requested"])
+        return False # Default to false if row somehow doesn't exist or flag is null

@@ -53,6 +53,13 @@ try:
     from scrape import scrape_phase as sp_scrape_phase
     scrape_phase = sp_scrape_phase
 
+    # ADDED: Fallbacks for new database functions
+    try:
+        from database import set_stop_scan_flag, should_stop_scan 
+    except ImportError:
+        def set_stop_scan_flag(stop_val): st.error("set_stop_scan_flag (fallback) not loaded.")
+        def should_stop_scan(): st.error("should_stop_scan (fallback) not loaded."); return False
+
 except ImportError as e:
     st.error(f"Critical Error: Failed to import core modules or paths: {e}. Application functionality will be severely limited.")
     # Define fallbacks for ALL imported names if an import fails
@@ -69,6 +76,12 @@ except ImportError as e:
         def delete_approved_job(pk): st.error("delete_approved_job (fallback) not loaded."); return False
     if scrape_phase is None:
         def scrape_phase(): st.error("scrape_phase (fallback) not loaded."); return (0,0)
+    # ADDED: Fallbacks for new database functions
+    try:
+        from database import set_stop_scan_flag, should_stop_scan 
+    except ImportError:
+        def set_stop_scan_flag(stop_val): st.error("set_stop_scan_flag (fallback) not loaded.")
+        def should_stop_scan(): st.error("should_stop_scan (fallback) not loaded."); return False
 
 # Call init_db() to ensure database and tables are created/updated
 if DB_PATH: # Ensure DB_PATH is set before calling
@@ -216,65 +229,103 @@ def fetch_approved_jobs():
         if conn:
             conn.close()
 
-# Initialize session state
-if 'scan_running' not in st.session_state:
-    st.session_state.scan_running = False
+# Explicit session state initialization at the top
+if 'scan_should_be_running' not in st.session_state:
+    st.session_state.scan_should_be_running = False
+if 'scan_actively_processing_in_this_run' not in st.session_state:
+    st.session_state.scan_actively_processing_in_this_run = False
+if 'user_requested_stop_in_this_run' not in st.session_state:
+    st.session_state.user_requested_stop_in_this_run = False
+if 'current_scan_stop_signal' not in st.session_state:
+    st.session_state.current_scan_stop_signal = [False] # Default to a non-None list
 if 'scan_message' not in st.session_state:
     st.session_state.scan_message = ""
-if 'action_message' not in st.session_state: # For per-job action feedback
-    st.session_state.action_message = {}
 if 'db_import_export_message' not in st.session_state:
-    st.session_state.db_import_export_message = None
-if 'show_db_uploader' not in st.session_state:
-    st.session_state.show_db_uploader = False
+    st.session_state.db_import_export_message = None # ADDED
+if 'show_db_uploader' not in st.session_state: # ADDED
+    st.session_state.show_db_uploader = False # ADDED
+if 'action_message' not in st.session_state: # ADDED
+    st.session_state.action_message = None # ADDED
+# Assuming other session states like db_import_export_message, show_db_uploader, action_message are initialized elsewhere or as needed.
 
-# --- Global Actions (Sidebar) ---
-st.sidebar.header("Job Management")
-scan_status_placeholder = st.sidebar.empty()
+# --- Callback Functions for Sidebar Actions ---
+def start_scan_action():
+    if scrape_phase: # Ensure scrape_phase is loaded
+        set_stop_scan_flag(False) # MODIFIED: Reset DB flag before starting
+        st.session_state.scan_should_be_running = True
+        st.session_state.scan_actively_processing_in_this_run = True
+        st.session_state.user_requested_stop_in_this_run = False
+        st.session_state.current_scan_stop_signal = [False] # Fresh signal for this new scan attempt
+        st.session_state.scan_message = "Scan initiated..."
+    else:
+        st.session_state.scan_message = "ERROR: Scan function not available. Cannot start scan."
+        st.session_state.scan_should_be_running = False 
+        st.session_state.scan_actively_processing_in_this_run = False
 
-if st.session_state.scan_running:
-    scan_status_placeholder.warning("Scan in progress... Please wait.")
-    st.sidebar.button("Start New Job Scan", disabled=True, key="global_start_scan")
-    st.sidebar.button("Clear All Approved Jobs", disabled=True, key="global_clear_approved")
-else:
-    if st.session_state.scan_message: # Display global scan message
-        scan_status_placeholder.info(st.session_state.scan_message)
-        st.session_state.scan_message = "" 
+def stop_scan_action():
+    set_stop_scan_flag(True) # MODIFIED: Set DB flag to request stop
+    st.session_state.scan_should_be_running = False  # User wants to stop the conceptual scan
+    st.session_state.scan_actively_processing_in_this_run = False # Stop any processing in current run
+    st.session_state.user_requested_stop_in_this_run = True       # Mark that stop was clicked for this interaction
+    st.session_state.scan_message = "Scan stop requested. The scan will attempt to terminate if running. UI state reset."
+    if st.session_state.current_scan_stop_signal:
+        st.session_state.current_scan_stop_signal[0] = True # Attempt to signal current run's scrape_phase
 
-    if st.sidebar.button("🚀 Start New Job Scan", key="global_start_scan", use_container_width=True):
-        if scrape_phase: # Check if function is available
-            st.session_state.scan_running = True
-            st.session_state.scan_message = "Scan initiated..."
-            st.rerun() 
-        else:
-            st.error("Scan function not available due to import error.")
-
-    if st.sidebar.button("🗑️ Clear All Approved Jobs", key="global_clear_approved", use_container_width=True, type="primary"):
+def clear_jobs_action():
+    global clear_all_approved_jobs 
+    if clear_all_approved_jobs:
         try:
             deleted_count = clear_all_approved_jobs()
             st.session_state.scan_message = f"Successfully cleared {deleted_count} approved jobs."
         except Exception as e:
             st.session_state.scan_message = f"Error clearing approved jobs: {e}"
-        st.rerun() # MODIFIED from st.experimental_rerun()
-
-if st.session_state.scan_running:
-    scan_status_placeholder.warning("Scan in progress... Scraping and analyzing. See terminal for details.")
-    
-    # Clear and reload config before starting scrape phase
-    if load_main_config:
-        try:
-            load_main_config.cache_clear()
-            load_main_config() # Call load to re-cache with fresh data
-            st.info("Configuration cache cleared and reloaded for job scan.")
-        except Exception as e:
-            st.warning(f"Could not clear/reload config cache for job scan: {e}")
     else:
-        st.warning("Config loader not available; cannot clear/reload cache for job scan.")
+        st.session_state.scan_message = "ERROR: Clear jobs function not available."
 
-    new_jobs, links_examined = scrape_phase()
-    st.session_state.scan_message = f"Scan complete. New jobs: {new_jobs}. Links examined: {links_examined}."
-    st.session_state.scan_running = False
-    st.rerun() # MODIFIED from st.experimental_rerun()
+# --- Global Actions (Sidebar) ---
+st.sidebar.header("Job Management")
+scan_status_placeholder = st.sidebar.empty()
+
+# Update status placeholder based on current states
+if st.session_state.get('scan_actively_processing_in_this_run', False):
+    scan_status_placeholder.warning("Scan in progress... Please wait.")
+elif st.session_state.get('scan_should_be_running', False): 
+    scan_status_placeholder.info("A scan was previously initiated. It may be running (orphaned if page refreshed). Click 'Stop Scan' to reset UI state.")
+elif st.session_state.get('user_requested_stop_in_this_run', False):
+    scan_status_placeholder.info(st.session_state.scan_message or "Scan stop processed.") 
+    st.session_state.user_requested_stop_in_this_run = False # Reset after displaying message
+    st.session_state.scan_message = "" # Clear message
+elif st.session_state.scan_message: # Residual messages
+    scan_status_placeholder.info(st.session_state.scan_message)
+    st.session_state.scan_message = ""
+else:
+    scan_status_placeholder.empty()
+
+# Start Scan Button
+st.sidebar.button("🚀 Start New Job Scan", 
+    key="global_start_scan", 
+    use_container_width=True, 
+    # disabled=st.session_state.get('scan_should_be_running', False), # Disabled if a scan is conceptually running
+    on_click=start_scan_action
+)
+
+# Stop Scan Button
+st.sidebar.button("🛑 Stop Scan", 
+    key="global_stop_scan", 
+    use_container_width=True, 
+    type="primary", 
+    # disabled=(not st.session_state.get('scan_should_be_running', False)), # Enabled if a scan is conceptually running
+    on_click=stop_scan_action
+)
+
+# Clear All Approved Jobs Button
+st.sidebar.button("🗑️ Clear All Approved Jobs", 
+    key="global_clear_approved", 
+    use_container_width=True, 
+    type="primary", 
+    disabled=st.session_state.get('scan_should_be_running', False), # Disable if any scan is conceptually running
+    on_click=clear_jobs_action
+)
 
 # --- Database Import/Export (Sidebar) ---
 st.sidebar.markdown("---")
@@ -365,72 +416,111 @@ if st.session_state.show_db_uploader:
                     st.warning(f"Could not clean up temp_db_uploads: {e_clean}")
             st.rerun()
 
+# --- Main Page Structure ---
 st.title("📋 JobFinder - Approved Jobs Dashboard")
+main_page_status_placeholder = st.empty() # Placeholder for spinner
+
+# Conditional execution of the scan in the main page area, with a spinner
+if st.session_state.get('scan_actively_processing_in_this_run', False):
+    with main_page_status_placeholder.container(), st.spinner("🚀 Scanning for jobs... This may take a moment."):
+        if load_main_config:
+            try: load_main_config.cache_clear(); load_main_config();
+            except Exception as e: st.warning(f"Could not clear/reload config: {e}")
+        
+        scan_outcome_message = ""
+        natural_completion = False
+
+        if scrape_phase and st.session_state.current_scan_stop_signal is not None:
+            if not st.session_state.current_scan_stop_signal[0]: # If not already signaled to stop
+                new_jobs, links_examined = scrape_phase(st.session_state.current_scan_stop_signal)
+                if not st.session_state.current_scan_stop_signal[0]: # Check if scrape_phase was stopped by signal during its run
+                    scan_outcome_message = f"Scan complete. New jobs: {new_jobs}. Links examined: {links_examined}."
+                    natural_completion = True 
+                # If current_scan_stop_signal[0] is True here, stop_scan_action already set the message.
+            else: # Signal was true before calling scrape_phase
+                scan_outcome_message = "Scan execution pre-empted by stop signal."
+        elif not scrape_phase:
+            scan_outcome_message = "Scan function not available. Scan aborted."
+        else: # current_scan_stop_signal is None (should not happen with new init)
+            scan_outcome_message = "Scan cannot start: stop signal not initialized properly."
+
+        if scan_outcome_message: # Update session message only if not already set by stop_scan_action
+             if not st.session_state.get('user_requested_stop_in_this_run', False):
+                st.session_state.scan_message = scan_outcome_message
+        
+        if natural_completion: # If scan ran and completed without external stop signal this run
+            st.session_state.scan_should_be_running = False
+        
+        st.session_state.scan_actively_processing_in_this_run = False # Always mark current run's processing as done
+    
+    main_page_status_placeholder.empty() 
+    st.rerun()
 
 # --- Display Approved Jobs ---
+# Show jobs if not actively trying to scan in this run
+if not st.session_state.get('scan_actively_processing_in_this_run', False):
+    action_message_placeholder = st.empty() 
+    if st.session_state.action_message:
+        msg_type = st.session_state.action_message.get("type", "info")
+        msg_text = st.session_state.action_message.get("text", "")
+        if msg_type == "success":
+            action_message_placeholder.success(msg_text)
+        elif msg_type == "error":
+            action_message_placeholder.error(msg_text)
+        else:
+            action_message_placeholder.info(msg_text)
+        # Consider clearing the message after display if desired, e.g., by uncommenting:
+        # st.session_state.action_message = {}
 
-action_message_placeholder = st.empty() 
-if st.session_state.action_message:
-    msg_type = st.session_state.action_message.get("type", "info")
-    msg_text = st.session_state.action_message.get("text", "")
-    if msg_type == "success":
-        action_message_placeholder.success(msg_text)
-    elif msg_type == "error":
-        action_message_placeholder.error(msg_text)
+
+    approved_jobs_df = fetch_approved_jobs()
+
+    if approved_jobs_df.empty:
+        st.warning("No approved jobs found in the database. Click Start New Job Scan to begin.")
     else:
-        action_message_placeholder.info(msg_text)
-    # Consider clearing the message after display if desired, e.g., by uncommenting:
-    # st.session_state.action_message = {}
-
-
-approved_jobs_df = fetch_approved_jobs()
-
-if approved_jobs_df.empty:
-    st.warning("No approved jobs found in the database. Click Start New Job Scan to begin.")
-else:
-    st.metric(label="Total Approved Jobs", value=len(approved_jobs_df))
-    st.markdown("---")
-
-    for index, row in approved_jobs_df.iterrows():
-        approved_job_pk = row['approved_job_pk']
-        title = html.escape(str(row['title'] if pd.notna(row['title']) else 'N/A'))
-        url = str(row['url'] if pd.notna(row['url']) else '#')
-        
-        col1, col2, col3 = st.columns([4, 3, 2])
-
-        with col1:
-            st.markdown(f"**[{title}]({url})**")
-            st.caption(f"Approved: {row['date_approved']} | Location: {row.get('location', 'N/A')} | Keyword: {row.get('keyword', 'N/A')}")
-            
-            # MODIFIED: Simplified is_applied logic
-            is_applied = pd.notna(row['date_applied_str']) 
-
-            if is_applied: # Check the boolean directly
-                st.success(f"Applied on: {row['date_applied_str']}")
-            else:
-                st.info("Status: Not yet applied")
-
-        with col2: 
-            with st.expander("Reason for Approval"):
-                st.markdown(f"<div style='word-wrap: break-word; white-space: pre-wrap;'>{html.escape(str(row.get('reason', 'N/A')))}</div>", unsafe_allow_html=True)
-        
-        with col3: 
-            applied_button_key = f"applied_{approved_job_pk}_{index}"
-            delete_button_key = f"delete_{approved_job_pk}_{index}"
-
-            # is_applied (boolean) is used directly in 'disabled'
-            if st.button("Mark as Applied", key=applied_button_key, disabled=is_applied, help="Mark this job as applied for." if not is_applied else "Already marked as applied."):
-                if mark_job_as_applied(approved_job_pk):
-                    st.session_state.action_message = {"type": "success", "text": f"Job '{title[:30]}...' marked as applied."}
-                else:
-                    st.session_state.action_message = {"type": "error", "text": f"Failed to mark '{title[:30]}...' as applied (possibly already marked or DB error)."}
-                st.rerun() # MODIFIED from st.experimental_rerun()
-
-            if st.button("Delete", key=delete_button_key, help="Remove this job from the approved list."):
-                if delete_approved_job(approved_job_pk):
-                    st.session_state.action_message = {"type": "success", "text": f"Job '{title[:30]}...' deleted from approved list."}
-                else:
-                    st.session_state.action_message = {"type": "error", "text": f"Failed to delete job '{title[:30]}...' (DB error or not found)."}
-                st.rerun() # MODIFIED from st.experimental_rerun()
+        st.metric(label="Total Approved Jobs", value=len(approved_jobs_df))
         st.markdown("---")
+
+        for index, row in approved_jobs_df.iterrows():
+            approved_job_pk = row['approved_job_pk']
+            title = html.escape(str(row['title'] if pd.notna(row['title']) else 'N/A'))
+            url = str(row['url'] if pd.notna(row['url']) else '#')
+            
+            col1, col2, col3 = st.columns([4, 3, 2])
+
+            with col1:
+                st.markdown(f"**[{title}]({url})**")
+                st.caption(f"Approved: {row['date_approved']} | Location: {row.get('location', 'N/A')} | Keyword: {row.get('keyword', 'N/A')}")
+                
+                # MODIFIED: Simplified is_applied logic
+                is_applied = pd.notna(row['date_applied_str']) 
+
+                if is_applied: # Check the boolean directly
+                    st.success(f"Applied on: {row['date_applied_str']}")
+                else:
+                    st.info("Status: Not yet applied")
+
+            with col2: 
+                with st.expander("Reason for Approval"):
+                    st.markdown(f"<div style='word-wrap: break-word; white-space: pre-wrap;'>{html.escape(str(row.get('reason', 'N/A')))}</div>", unsafe_allow_html=True)
+            
+            with col3: 
+                applied_button_key = f"applied_{approved_job_pk}_{index}"
+                delete_button_key = f"delete_{approved_job_pk}_{index}"
+
+                # is_applied (boolean) is used directly in 'disabled'
+                if st.button("Mark as Applied", key=applied_button_key, disabled=is_applied, help="Mark this job as applied for." if not is_applied else "Already marked as applied."):
+                    if mark_job_as_applied(approved_job_pk):
+                        st.session_state.action_message = {"type": "success", "text": f"Job '{title[:30]}...' marked as applied."}
+                    else:
+                        st.session_state.action_message = {"type": "error", "text": f"Failed to mark '{title[:30]}...' as applied (possibly already marked or DB error)."}
+                    st.rerun() # MODIFIED from st.experimental_rerun()
+
+                if st.button("Delete", key=delete_button_key, help="Remove this job from the approved list."):
+                    if delete_approved_job(approved_job_pk):
+                        st.session_state.action_message = {"type": "success", "text": f"Job '{title[:30]}...' deleted from approved list."}
+                    else:
+                        st.session_state.action_message = {"type": "error", "text": f"Failed to delete job '{title[:30]}...' (DB error or not found)."}
+                    st.rerun() # MODIFIED from st.experimental_rerun()
+            st.markdown("---")
 

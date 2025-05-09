@@ -310,6 +310,13 @@ def _fetch_and_update(job: dict) -> None:
         title = extract_job_title(soup)
         desc  = extract_job_description(soup)
 
+    # ADDED BLOCK: Check exclusions against the full title
+    if title and evaluate.contains_exclusions(title):
+        # sys.stdout.write(f"INFO: Job ID {linkedin_job_id} ('{title}') excluded based on full title.\\n") # Optional logging
+        # sys.stdout.flush()
+        database.mark_job_as_analyzed(job_id=linkedin_job_id) # Mark as analyzed to prevent re-processing
+        return # Skip further processing for this job
+
     if title is None or desc is None:
         g_title, g_desc = _fetch_guest(linkedin_job_id)
         if title is None:
@@ -402,7 +409,7 @@ def show_progress(idx: int, total: int, bar_len: int = 40) -> None:
     sys.stdout.write(f"\r[{bar}] {idx}/{total} ({pct:.0%})")
     sys.stdout.flush()
 
-def scrape_phase() -> tuple[int, int]:
+def scrape_phase(stop_signal: List[bool]) -> tuple[int, int]:
     """
     Conducts the scraping phase.
     Returns a tuple: (new_jobs_this_run, total_links_examined)
@@ -427,6 +434,13 @@ def scrape_phase() -> tuple[int, int]:
     total_links_examined_this_run = 0
     try:
         for i, search in enumerate(searches, 1):
+            # Check both the immediate signal and the persistent DB signal
+            if (stop_signal and stop_signal[0]) or database.should_stop_scan(): # MODIFIED
+                sys.stdout.write("\nINFO: Scrape phase received stop signal. Terminating early.\n")
+                sys.stdout.flush()
+                database.set_stop_scan_flag(False) # Reset the flag after acknowledging stop
+                break
+
             links_on_page = process_search_page(search) or 0 # process_search_page is in scrape.py
             total_links_examined_this_run += links_on_page
             show_progress(i, total_searches)
