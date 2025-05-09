@@ -27,6 +27,13 @@ clear_all_approved_jobs = None
 mark_job_as_applied = None
 delete_approved_job = None
 
+# Attempt to import the main config loader for cache management
+try:
+    from config import load as load_main_config
+except ImportError:
+    load_main_config = None # Fallback if config.py or load isn't found
+    st.error("Failed to import config loader. Configuration reloading may not work as expected.")
+
 try:
     from utils import DB_PATH as UTILS_DB_PATH # Use an alias
     DB_PATH = UTILS_DB_PATH # Assign to the global DB_PATH
@@ -153,6 +160,18 @@ else:
 
 if st.session_state.scan_running:
     scan_status_placeholder.warning("Scan in progress... Scraping and analyzing. See terminal for details.")
+    
+    # Clear and reload config before starting scrape phase
+    if load_main_config:
+        try:
+            load_main_config.cache_clear()
+            load_main_config() # Call load to re-cache with fresh data
+            st.info("Configuration cache cleared and reloaded for job scan.")
+        except Exception as e:
+            st.warning(f"Could not clear/reload config cache for job scan: {e}")
+    else:
+        st.warning("Config loader not available; cannot clear/reload cache for job scan.")
+
     new_jobs, links_examined = scrape_phase()
     st.session_state.scan_message = f"Scan complete. New jobs: {new_jobs}. Links examined: {links_examined}."
     st.session_state.scan_running = False

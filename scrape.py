@@ -18,8 +18,9 @@ import sys
 T = TypeVar("T")
 
 config = load()
-locations = config["locations"]
-keywords = config["keywords"]
+search_params = config["search_parameters"]
+locations = search_params["locations"]
+keywords = search_params["keywords"]
 
 MAX_WORKERS = 5
 RETRIES     = 4
@@ -38,7 +39,7 @@ _JOB_ID_RE = re.compile(r"/jobs/view/(?:[^/?]*-)?(\d+)(?:[/?]|$)")
 
 def shuffled(seq: Sequence[T]) -> List[T]:
     """Return a new list containing all items from *seq* in random order."""
-    tmp = list(seq)          # copy so the caller’s list is untouched
+    tmp = list(seq)          # copy so the caller's list is untouched
     random.shuffle(tmp)
     return tmp
 

@@ -6,3 +6,4 @@ tomli
 openai
 google-generativeai
 streamlit
+toml

@@ -1,0 +1,14 @@
+[search_parameters]
+locations = [ "Remote",]
+keywords = [ "Software Engineer", "Python Developer",]
+exclusion_keywords = [ "Senior", "Sr.", "Lead", "Manager",]
+
+[resume]
+text = "Your resume text here. Paste your full resume or a summary."
+
+[prompts]
+evaluation_prompt = "MUST-HAVE Criteria (job must meet ALL of these):\n- Must NOT require any security clearance\n- Must be a full-time position\n\nFLEXIBLE Criteria (job should ideally meet these, but can be flexible):\n- Technical requirements can be offset by certifications, education, or demonstrated learning ability\n- Tool-specific experience can often be learned on the job\n\nDo NOT reject the job solely for:\n- Asking for 1-2 years of experience\n- Requiring specific tools experience\n- Listing certifications as requirements (unless explicitly marked as \"must have before starting\")"
+
+[api_keys]
+google_api_key = "YOUR_GOOGLE_API_KEY_HERE"
+openai_api_key = "YOUR_OPENAI_API_KEY_HERE"

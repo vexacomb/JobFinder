@@ -1,6 +1,5 @@
 # utils.py
 import sys
-import os
 from pathlib import Path
 
 def get_application_path() -> Path:
@@ -22,21 +21,14 @@ def get_application_path() -> Path:
 # Define common paths based on the application path
 APP_ROOT = get_application_path()
 CONFIG_FILE_PATH = APP_ROOT / "config.toml"
-ENV_FILE_PATH = APP_ROOT / ".env"
+# ENV_FILE_PATH = APP_ROOT / ".env" # .env file is no longer primary for API keys
 DB_PATH = APP_ROOT / "database.db" # Assuming database.db is also in the root
 
-# You might also want to ensure .env exists for dotenv operations elsewhere
-if not ENV_FILE_PATH.exists():
-    try:
-        ENV_FILE_PATH.touch() # Create it if it doesn't exist, so dotenv can write to it
-        print(f"Notice: .env file was not found, created at {ENV_FILE_PATH}")
-    except Exception as e:
-        print(f"Warning: Could not create .env file at {ENV_FILE_PATH}: {e}")
-
+# Removed .env file creation logic as it's no longer central to API key management.
 
 # Test (optional, run python utils.py to see the paths)
 if __name__ == '__main__':
     print(f"Application Root: {APP_ROOT}")
     print(f"Config File Path: {CONFIG_FILE_PATH}")
-    print(f"Env File Path: {ENV_FILE_PATH}")
+    # print(f"Env File Path: {ENV_FILE_PATH}") # Commented out as ENV_FILE_PATH is removed
     print(f"Database Path: {DB_PATH}")

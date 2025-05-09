@@ -1,5 +1,5 @@
 # evaluate.py
-import env
+# import env # Removed as API keys are now managed via config.toml
 
 import re
 from config import load
@@ -16,8 +16,13 @@ from google.generativeai import types as gen_types
 
 
 config = load()
-exclusions = config["exclusions"]
-default_resume = config["default_resume"]
+print(f"DEBUG: Loaded config keys: {config.keys()}")
+if 'search_parameters' in config:
+    print(f"DEBUG: search_parameters keys: {config['search_parameters'].keys()}")
+else:
+    print("DEBUG: search_parameters key NOT FOUND in config")
+exclusions = config["search_parameters"]["exclusion_keywords"]
+default_resume = config["resume"]["text"]
 
 #_OPENAI_MODEL = "gpt-4.1-mini"  # OpenAI model identifier
 _OPENAI_MODEL = "gpt-4o"  # OpenAI model identifier
@@ -90,6 +95,20 @@ def call_openai(prompt: str, temperature: float = 0) -> Dict[str, Any]:
     return json.loads(response.choices[0].message.content)
 
 def call_gemini(prompt: str, temperature: float = 0) -> dict:
+    current_config = load() # Load config, potentially cached
+    google_api_key = current_config.get("api_keys", {}).get("google_api_key")
+
+    if not google_api_key or google_api_key == "YOUR_GOOGLE_API_KEY_HERE":
+        raise ValueError("Google API Key not configured in config.toml or is a placeholder.")
+    
+    # Configure Gemini API key before making a call
+    # This configuration is sticky for the genai module until changed again or process ends.
+    try:
+        genai.configure(api_key=google_api_key)
+    except Exception as e:
+        # genai.configure can raise if api_key is invalid format, etc.
+        raise ValueError(f"Failed to configure Google Gemini API: {e}")
+
     model = genai.GenerativeModel(_GEMINI_MODEL)
     resp = model.generate_content(
         prompt,
@@ -108,10 +127,22 @@ def analyze_job(
 
     prompt = prompt_eligibility(job_description, resume)
 
+    # Ensure config is loaded to get API keys if needed by call_openai or call_gemini
+    # The functions themselves will handle fetching the keys from the loaded config.
+    # config.load.cache_clear() # This should be called elsewhere, e.g., after saving in UI
+    # load() # Ensure config is loaded if not already
+
     call: Callable[[str, float], Dict[str, Any]]
     if provider.lower() == "openai":
+        # Configure OpenAI API key before making a call
+        current_config = load()
+        openai_api_key = current_config.get("api_keys", {}).get("openai_api_key")
+        if not openai_api_key or openai_api_key == "YOUR_OPENAI_API_KEY_HERE":
+            raise ValueError("OpenAI API Key not configured in config.toml or is a placeholder.")
+        openai.api_key = openai_api_key # Set the API key for the openai module
         call = call_openai
     elif provider.lower() == "gemini":
+        # Gemini configuration is handled within call_gemini itself to ensure it happens just before model instantiation
         call = call_gemini
     else:
         raise ValueError("provider must be 'openai' or 'gemini'")
