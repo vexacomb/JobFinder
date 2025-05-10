@@ -45,22 +45,19 @@ Either method will launch the JobFinder Streamlit web dashboard in your default 
 
 The JobFinder dashboard provides several pages accessible via the sidebar navigation:
 
-*   **01 Dashboard:**
+*   **Dashboard:**
     *   Displays a list of jobs that have been scraped and approved by the AI.
     *   For each job, you can:
         *   View details (title, location, approval reason).
         *   Click the job title to open the original LinkedIn posting in a new tab.
         *   "Mark as Applied": Updates the job's status.
         *   "Delete": Removes the job from the approved list.
-    *   **Sidebar Actions:**
-        *   "Start New Job Scan": Initiates the process of scraping LinkedIn and evaluating jobs. Progress will be shown in the terminal running the application.
-        *   "Clear All Approved Jobs": Removes all entries from the approved jobs list in the database.
 
-*   **02 Applied Jobs:**
+*   **Applied Jobs:**
     *   Shows a list of all jobs you have previously marked as "applied."
 
-*   **03 Inputs:**
-    *   Allows you to view and modify the application's configuration (`config.toml` file).
+*   **Inputs:**
+    *   Allows you to view and modify the application's configuration.
     *   You can edit:
         *   Search locations and keywords.
         *   Exclusion keywords to filter out unwanted jobs.

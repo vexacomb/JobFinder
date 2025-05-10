@@ -204,6 +204,7 @@ def fetch_approved_jobs():
             approved_jobs aj
         JOIN
             discovered_jobs dj ON aj.discovered_job_id = dj.id
+        WHERE aj.date_applied IS NULL  -- MODIFIED: Only fetch jobs not yet applied
         ORDER BY
             aj.date_approved DESC;
         """
@@ -479,48 +480,56 @@ if not st.session_state.get('scan_actively_processing_in_this_run', False):
         st.warning("No approved jobs found in the database. Click Start New Job Scan to begin.")
     else:
         st.metric(label="Total Approved Jobs", value=len(approved_jobs_df))
-        st.markdown("---")
+        # st.markdown("---") # Removed initial redundant separator here, separator will be after each card
 
         for index, row in approved_jobs_df.iterrows():
-            approved_job_pk = row['approved_job_pk']
-            title = html.escape(str(row['title'] if pd.notna(row['title']) else 'N/A'))
-            url = str(row['url'] if pd.notna(row['url']) else '#')
+            with st.container(): # WRAP each job in a container
+                approved_job_pk = row['approved_job_pk']
+                title = html.escape(str(row['title'] if pd.notna(row['title']) else 'N/A'))
+                url = str(row['url'] if pd.notna(row['url']) else '#')
+                date_approved_val = row['date_approved']
+                location_val = row.get('location', 'N/A')
+                keyword_val = row.get('keyword', 'N/A')
+                reason_val = html.escape(str(row.get('reason', 'N/A')))
+
+                # Use two columns: one for details, one for actions
+                col_details, col_actions = st.columns([5, 1.5]) # Adjusted column ratio
+
+                with col_details:
+                    # Make title larger and a styled link
+                    st.markdown(f"<h5><a href='{url}' target='_blank' style='text-decoration: none; color: inherit !important;'>{title}</a></h5>", unsafe_allow_html=True)
+                    
+                    st.caption(f"📅 Approved: {date_approved_val} | 📍 Location: {location_val} | 🔑 Keyword: {keyword_val}")
+                    
+                    with st.expander("Reason for Approval"):
+                        st.markdown(f"<div style='word-wrap: break-word; white-space: pre-wrap;'>{reason_val}</div>", unsafe_allow_html=True)
+
+                with col_actions:
+                    # ADDED: Attempt to add some vertical space to align buttons better
+                    st.markdown("<br>", unsafe_allow_html=True) # Adjust <br> count or use specific margin if needed
+                    # st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True) # Alternative spacing
+
+                    applied_button_key = f"applied_{approved_job_pk}_{index}"
+                    delete_button_key = f"delete_{approved_job_pk}_{index}"
+
+                    if st.button("Mark as Applied", key=applied_button_key, 
+                                  help="Mark this job as applied for.", 
+                                  use_container_width=True):
+                        if mark_job_as_applied(approved_job_pk):
+                            st.session_state.action_message = {"type": "success", "text": f"Job '{title[:30]}...' marked as applied."}
+                        st.rerun()
+                    
+                    # Add a little space between buttons if they are stacked vertically in the same column
+                    st.markdown("<div style='margin-top: 8px;'></div>", unsafe_allow_html=True)
+
+                    if st.button("Delete Job", key=delete_button_key, 
+                                 help="Remove this job from the approved list.", 
+                                 use_container_width=True, type="primary"):
+                        if delete_approved_job(approved_job_pk):
+                            st.session_state.action_message = {"type": "success", "text": f"Job '{title[:30]}...' deleted from approved list."}
+                        else:
+                            st.session_state.action_message = {"type": "error", "text": f"Failed to delete job '{title[:30]}...' (DB error or not found)."}
+                        st.rerun()
             
-            col1, col2, col3 = st.columns([4, 3, 2])
-
-            with col1:
-                st.markdown(f"**[{title}]({url})**")
-                st.caption(f"Approved: {row['date_approved']} | Location: {row.get('location', 'N/A')} | Keyword: {row.get('keyword', 'N/A')}")
-                
-                # MODIFIED: Simplified is_applied logic
-                is_applied = pd.notna(row['date_applied_str']) 
-
-                if is_applied: # Check the boolean directly
-                    st.success(f"Applied on: {row['date_applied_str']}")
-                else:
-                    st.info("Status: Not yet applied")
-
-            with col2: 
-                with st.expander("Reason for Approval"):
-                    st.markdown(f"<div style='word-wrap: break-word; white-space: pre-wrap;'>{html.escape(str(row.get('reason', 'N/A')))}</div>", unsafe_allow_html=True)
-            
-            with col3: 
-                applied_button_key = f"applied_{approved_job_pk}_{index}"
-                delete_button_key = f"delete_{approved_job_pk}_{index}"
-
-                # is_applied (boolean) is used directly in 'disabled'
-                if st.button("Mark as Applied", key=applied_button_key, disabled=is_applied, help="Mark this job as applied for." if not is_applied else "Already marked as applied."):
-                    if mark_job_as_applied(approved_job_pk):
-                        st.session_state.action_message = {"type": "success", "text": f"Job '{title[:30]}...' marked as applied."}
-                    else:
-                        st.session_state.action_message = {"type": "error", "text": f"Failed to mark '{title[:30]}...' as applied (possibly already marked or DB error)."}
-                    st.rerun() # MODIFIED from st.experimental_rerun()
-
-                if st.button("Delete", key=delete_button_key, help="Remove this job from the approved list."):
-                    if delete_approved_job(approved_job_pk):
-                        st.session_state.action_message = {"type": "success", "text": f"Job '{title[:30]}...' deleted from approved list."}
-                    else:
-                        st.session_state.action_message = {"type": "error", "text": f"Failed to delete job '{title[:30]}...' (DB error or not found)."}
-                    st.rerun() # MODIFIED from st.experimental_rerun()
-            st.markdown("---")
+            st.markdown("---") # Separator after each job card
 

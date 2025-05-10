@@ -135,21 +135,7 @@ st.title("⚙️ JobFinder - Configuration")
 with st.sidebar:
     st.header("Configuration Actions")
 
-    # --- AI Provider Selection --- ADDED SECTION
-    st.subheader("AI Settings") # ADDED
-    current_config_for_radio = load_config_data(CONFIG_FILE_PATH) # ADDED
-    current_ai_provider = current_config_for_radio.get("general", {}).get("ai_provider", "gemini") # ADDED
-    ai_provider_options = ["gemini", "openai"] # ADDED
-    
-    selected_ai_provider = st.radio( # ADDED
-        "Choose AI Provider:", # ADDED
-        options=ai_provider_options, # ADDED
-        index=ai_provider_options.index(current_ai_provider) if current_ai_provider in ai_provider_options else 0, # ADDED
-        key="ai_provider_select", # ADDED
-        help="Select the AI provider for job evaluation. This setting is saved when you click 'Save All Settings'." # ADDED
-    ) # ADDED
-    st.markdown("---") # ADDED
-
+    # --- Save All Settings Button (MOVED UP) ---
     if st.button("💾 Save All Settings", key="save_all_settings_sidebar_button", help="Save TOML configuration including API Keys.", use_container_width=True):
         
         # TOML Config Saving (including API Keys)
@@ -157,7 +143,7 @@ with st.sidebar:
             "locations_text_area", "keywords_text_area", 
             "exclusions_text_area", "default_resume_text_area", 
             "ai_prompt_text_area", "google_api_key_input", "openai_api_key_input",
-            "ai_provider_select" # ADDED
+            "ai_provider_select" 
         ]
         if all(k in st.session_state for k in required_toml_keys):
             updated_config_data = {
@@ -176,11 +162,11 @@ with st.sidebar:
                     "google_api_key": st.session_state.google_api_key_input,
                     "openai_api_key": st.session_state.openai_api_key_input
                 },
-                "general": { # ADDED
-                    "ai_provider": st.session_state.ai_provider_select # ADDED
+                "general": { 
+                    "ai_provider": st.session_state.ai_provider_select 
                 }
             }
-            save_config_data(CONFIG_FILE_PATH, updated_config_data) # CONFIG_FILE_PATH from utils
+            save_config_data(CONFIG_FILE_PATH, updated_config_data) 
             st.session_state.config_just_saved_inputs_page = True 
         else:
             missing_keys = [k for k in required_toml_keys if k not in st.session_state]
@@ -188,7 +174,7 @@ with st.sidebar:
         
         st.rerun()
 
-    # Export Button (Moved Before Import)
+    # --- Export Button ---
     try:
         with open(CONFIG_FILE_PATH, "r", encoding="utf-8") as f:
             config_content_for_export = f.read()
@@ -206,19 +192,17 @@ with st.sidebar:
         st.error(f"Could not read config for export: {e}")
 
     # --- Import Configuration ---
-    # Initialize session state for uploader visibility
     if 'show_config_uploader' not in st.session_state:
         st.session_state.show_config_uploader = False
 
     if st.button("📥 Import Configuration", use_container_width=True, key="show_config_uploader_button", help="Click to reveal the uploader, then select a TOML configuration file."):
         st.session_state.show_config_uploader = True
-        # No st.rerun() here, the script will continue and render the uploader if state is True
 
     if st.session_state.show_config_uploader:
         uploaded_file = st.file_uploader(
-            "Upload Configuration File", # Label text (will be hidden by label_visibility)
+            "Upload Configuration File",
             type=["toml"],
-            key="config_file_uploader_widget", # Ensure a unique key for the widget itself
+            key="config_file_uploader_widget",
             help="Upload a TOML configuration file. This will overwrite current settings if valid.",
             label_visibility="collapsed"
         )
@@ -232,27 +216,38 @@ with st.sidebar:
                 
                 if is_valid:
                     save_config_data(CONFIG_FILE_PATH, imported_data)
-                    st.session_state.config_just_saved_inputs_page = True # Trigger reload logic
+                    st.session_state.config_just_saved_inputs_page = True 
                     st.success("Configuration imported successfully and saved!")
-                    st.session_state.import_error_message = None # Clear any previous error upon success
+                    st.session_state.import_error_message = None 
                 else:
-                    # Store the specific validation error message in session state
                     st.session_state.import_error_message = f"Invalid configuration file: {message}"
             except toml.TomlDecodeError:
                 st.session_state.import_error_message = "Invalid TOML format in the uploaded file."
             except Exception as e:
                 st.session_state.import_error_message = f"Error processing uploaded file: {e}"
             finally:
-                # Hide the uploader and rerun whether successful or not
                 st.session_state.show_config_uploader = False
-                # Clear the uploaded file from the uploader's internal state by changing its key or rerunning.
-                # Forcing a rerun is simpler to ensure fresh state.
                 st.rerun() 
 
-    # MOVED HERE: Display import error message AFTER import button and all its processing
     if "import_error_message" in st.session_state and st.session_state.import_error_message:
         st.error(st.session_state.import_error_message)
-        st.session_state.import_error_message = None # Clear after displaying
+        st.session_state.import_error_message = None
+    
+    st.markdown("---") # ADDED separator before AI settings
+
+    # --- AI Provider Selection (MOVED DOWN) ---
+    st.subheader("AI Settings") 
+    current_config_for_radio = load_config_data(CONFIG_FILE_PATH) 
+    current_ai_provider = current_config_for_radio.get("general", {}).get("ai_provider", "gemini") 
+    ai_provider_options = ["gemini", "openai"] 
+    
+    selected_ai_provider = st.radio( 
+        "Choose AI Provider:", 
+        options=ai_provider_options, 
+        index=ai_provider_options.index(current_ai_provider) if current_ai_provider in ai_provider_options else 0, 
+        key="ai_provider_select", 
+        help="Select the AI provider for job evaluation. This setting is saved when you click 'Save All Settings'." 
+    ) 
 
 
 # --- Load Config Data (TOML) ---
