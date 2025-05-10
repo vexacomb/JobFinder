@@ -10,7 +10,10 @@ text = "Adaptable and detail-oriented professional with hands-on experience in t
 evaluation_prompt = "MUST-HAVE Criteria (job must meet ALL of these):\n- Must NOT require any security clearance\n- Must be a full-time position\n- Must be remote or located within the United States\n\nFLEXIBLE Criteria (job should ideally meet these, but can be flexible):\n- Technical requirements can be offset by certifications, education, or demonstrated learning ability\n- Tool-specific experience can often be learned on the job\n\nDo NOT reject the job solely for:\n- Asking for 1-2 years of experience\n- Requiring specific tools experience\n- Listing certifications as requirements (unless explicitly marked as "must have before starting")"
 
 [api_keys]
+# Official guide: https://ai.google.dev/gemini-api/docs/api-key
 google_api_key = "YOUR_GEMINI_API_KEY_HERE"
+
+# Official guide: https://www.pickaxeproject.com/post/how-to-get-your-openai-api-key-a-step-by-step-guide
 openai_api_key = "YOUR_OPENAI_API_KEY_HERE"
 
 [general]

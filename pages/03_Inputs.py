@@ -295,6 +295,8 @@ st.text_input(
     help="Your Google API key for Gemini AI.",
     key="google_api_key_input"
 )
+st.markdown("[How to get a Google Gemini API key](https://ai.google.dev/gemini-api/docs/api-key)")
+
 st.text_input(
     "🔑 OpenAI API Key", # Assuming you want to keep this field functional
     value=openai_api_key_val,
@@ -302,6 +304,7 @@ st.text_input(
     help="Your OpenAI API key.",
     key="openai_api_key_input"
 )
+st.markdown("[How to get an OpenAI API key](https://www.pickaxeproject.com/post/how-to-get-your-openai-api-key-a-step-by-step-guide)")
 st.markdown("---")
 
 st.header("📝 Search Parameters")
