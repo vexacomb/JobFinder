@@ -69,6 +69,11 @@ def prompt_eligibility(job_description: str, resume: Optional[str] = None) -> st
         "candidate is eligible for the role."
         "Assume the candidate is eligible via US citizenship or residency requirements."
     )
+    
+    # Add evaluation criteria from config
+    if 'prompts' in config and 'evaluation_prompt' in config['prompts']:
+        base += f"\n\nEvaluation Criteria:\n{config['prompts']['evaluation_prompt']}"
+    
     if resume:
         base += f"\n\nJob Description:\n{sanitize_text(job_description.strip())}\n\nCandidate Resume:\n{sanitize_text(resume.strip())}"
     else:

@@ -20,11 +20,20 @@ DEFAULT_CONFIG = {
         "text": "Your resume text here. Paste your full resume or a summary."
     },
     "prompts": {
-        "evaluation_prompt": """Analyze the following job description based on the provided resume.
-Determine if the job is a good fit.
-Consider the keywords, location, and exclusion keywords.
-Provide a brief reason for your decision (approve or reject).
-Output only 'approve' or 'reject' followed by a colon and the reason. Example: 'approve: The job matches the keywords and location, and the experience aligns with the resume.' or 'reject: The location is not remote and the experience level required is too high.'"""
+        "evaluation_prompt": """Please evaluate this job posting based on the following criteria:
+
+MUST-HAVE Criteria (job must meet ALL of these):
+- Must NOT require any security clearance
+- Must be a full-time position
+
+FLEXIBLE Criteria (job should ideally meet these, but can be flexible):
+- Technical requirements can be offset by certifications, education, or demonstrated learning ability
+- Tool-specific experience can often be learned on the job
+
+Do NOT reject the job solely for:
+- Asking for 1-2 years of experience
+- Requiring specific tools experience
+- Listing certifications as requirements (unless explicitly marked as "must have before starting")"""
     },
     "api_keys": { # New section for API keys
         "google_api_key": "YOUR_GOOGLE_API_KEY_HERE",
