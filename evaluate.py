@@ -6,7 +6,7 @@ from config import load
 
 import os
 import json
-from typing import List, Dict, Any, Callable
+from typing import List, Dict, Any, Callable, Optional
 
 import openai
 import google.generativeai as genai
@@ -60,7 +60,7 @@ def sanitize_text(text: str) -> str:
     # Remove any remaining non-ASCII characters
     return ''.join(char for char in text if ord(char) < 128)
     
-def prompt_eligibility(job_description: str, resume: str | None = None) -> str:
+def prompt_eligibility(job_description: str, resume: Optional[str] = None) -> str:
     base = (
         "You are an AI recruiter assistant.\n"
         "You are a helpful assistant that evaluates job postings with a realistic understanding of hiring practices. "
@@ -121,7 +121,7 @@ def call_gemini(prompt: str, temperature: float = 0) -> dict:
 
 def analyze_job(
     job_description: str,
-    resume: str | None = default_resume,
+    resume: Optional[str] = default_resume,
     temperature: float = 0,
 ) -> Dict[str, Any]:
 
@@ -152,7 +152,7 @@ def analyze_job(
 
 def batch_analyse_jobs(
     job_descriptions: List[str],
-    resume: str | None = None,
+    resume: Optional[str] = None,
     temperature: float = 0,
 ) -> List[Dict[str, Any]]:
     return [

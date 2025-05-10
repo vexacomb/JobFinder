@@ -171,7 +171,7 @@ def row_missing_details(job_id: int) -> bool:
         return conn.execute(sql, (job_id,)).fetchone() is not None
 
 
-def update_details(job_id: int, title: str | None, desc: str | None) -> None:
+def update_details(job_id: int, title: Optional[str], desc: Optional[str]) -> None:
     sql = """
     UPDATE discovered_jobs
        SET title       = COALESCE(?, title),

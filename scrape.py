@@ -9,7 +9,7 @@ from urllib.parse import urlparse, parse_qs
 from config import load
 import database
 import random
-from typing import Sequence, List, TypeVar
+from typing import Sequence, List, TypeVar, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 from http import HTTPStatus
@@ -158,7 +158,7 @@ def clean_description(raw_html: str) -> str:
     
     return cleaned.strip()
 
-def canonical_job_url(raw: str) -> str | None:
+def canonical_job_url(raw: str) -> Optional[str]:
     """
     Return 'https://www.linkedin.com/jobs/view/<id>/' for any flavour of
     LinkedIn job link.  Handles:
@@ -239,7 +239,7 @@ def extract_job_title(job_soup):
 
     return None
 
-def extract_job_id(url: str) -> int | None:
+def extract_job_id(url: str) -> Optional[int]:
     m = _JOB_ID_RE.search(urllib.parse.urlparse(url).path)
     if m:
         return int(m.group(1))
@@ -364,7 +364,7 @@ def _fetch_and_update(job: dict) -> None:
 
 
 
-def _safe_fetch(url: str) -> str | None:
+def _safe_fetch(url: str) -> Optional[str]:
     delay = BASE_DELAY
     for _ in range(RETRIES):
         r = requests.get(url, headers=HEADERS, timeout=15)
@@ -378,7 +378,7 @@ def _safe_fetch(url: str) -> str | None:
     return None
 
 
-def _fetch_guest(job_id: int) -> tuple[str | None, str | None]:
+def _fetch_guest(job_id: int) -> tuple[Optional[str], Optional[str]]:
     url  = f"https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{job_id}"
     html = _safe_fetch(url)
     if not html:
