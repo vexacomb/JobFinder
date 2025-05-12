@@ -324,6 +324,11 @@ def _fetch_and_update(job: dict) -> None:
         if desc is None:
             desc = g_desc
 
+    # ADDED: Second exclusion check for title obtained from fallback
+    if title and evaluate.contains_exclusions(title):
+        database.mark_job_as_analyzed(job_id=linkedin_job_id)
+        return
+
     if title is not None or desc is not None:
         database.update_details(linkedin_job_id, title, desc)
 
