@@ -425,6 +425,16 @@ def scrape_phase(stop_signal: List[bool]) -> tuple[int, int]:
     print("Initializing scraping: Generating search list...")
     sys.stdout.flush()
 
+    # ADDED: Load/Reload config before generating searches
+    try:
+        config = load() # Reload config from file
+        # Update local variables if needed based on reloaded config
+        locations = config.get("search_parameters", {}).get("locations", [])
+        keywords = config.get("search_parameters", {}).get("keywords", [])
+    except Exception as e:
+        print(f"WARN: Failed to reload config before scraping: {e}. Using potentially stale config.")
+        # Optionally handle error more gracefully, e.g., stop if config is crucial and failed to load
+
     start_total_db_rows = _rowcount()
     searches = get_searches() # Assumes get_searches is defined in scrape.py
     total_searches = len(searches)

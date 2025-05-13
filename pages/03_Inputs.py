@@ -3,7 +3,8 @@ from pathlib import Path
 import toml
 # from dotenv import get_key, set_key, find_dotenv # No longer needed for .env specific operations here
 from utils import CONFIG_FILE_PATH # Use paths from utils
-from config import load as load_main_config # For cache clearing
+# from config import load as load_main_config # For cache clearing
+from config import load # Use direct import
 
 # --- File Paths ---
 # PROJECT_ROOT = Path(__file__).resolve().parent.parent # Use utils.APP_ROOT if a generic root is needed elsewhere
@@ -28,8 +29,7 @@ def save_config_data(file_path: Path, data: dict):
             toml.dump(data, f)
         st.toast(f"Configuration saved to '{file_path.name}'!", icon="✅")
         # Clear the cache of the main config loader
-        # load_main_config.cache_clear()
-        st.toast("Configuration cache cleared.", icon="♻️")
+        # load_main_config.cache_clear() # Now refers to load directly, still no cache_clear
 
     except Exception as e:
         st.error(f"Error saving TOML config file '{file_path}': {e}")

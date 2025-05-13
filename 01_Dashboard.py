@@ -31,9 +31,9 @@ delete_approved_job = None
 
 # Attempt to import the main config loader for cache management
 try:
-    from config import load as load_main_config
+    from config import load # Use direct import
 except ImportError:
-    load_main_config = None # Fallback if config.py or load isn't found
+    load = None # Set load to None on import error
     st.error("Failed to import config loader. Configuration reloading may not work as expected.")
 
 try:
@@ -251,6 +251,14 @@ if 'action_message' not in st.session_state: # ADDED
 
 # --- Callback Functions for Sidebar Actions ---
 def start_scan_action():
+    if load: # Check if load function is available
+        try:
+            load() # Reload config from file immediately before starting scan
+        except Exception as e:
+            st.warning(f"Could not reload config before scan: {e}")
+            # Decide if you want to proceed with potentially stale config or stop
+            # For now, we'll proceed but show a warning.
+
     if scrape_phase: # Ensure scrape_phase is loaded
         set_stop_scan_flag(False) # MODIFIED: Reset DB flag before starting
         st.session_state.scan_should_be_running = True
@@ -532,11 +540,15 @@ if not st.session_state.get('scan_actively_processing_in_this_run', False):
 if st.button("🔄 Reload Configuration"):
     try:
         # if load_main_config: load_main_config.cache_clear() # Example: clear config cache
-        cfg = config.load() # Reload the config
-        st.toast("Configuration reloaded successfully!", icon="✅")
+        if load: # Check if import succeeded
+             load() # Call the imported load function directly
+             st.toast("Configuration reloaded successfully!", icon="✅")
+        else:
+             st.error("Configuration loader not available.")
         # Optional: Clear other caches or rerun parts of the app if needed
     except Exception as e:
-        st.error(f"Failed to save settings: {e}")
+        # st.error(f"Failed to save settings: {e}") # This message might now be less relevant or need adjustment
+        st.error(f"Error during configuration reload: {e}") # More specific error
     finally:
         # Clear caches etc after save
         # try: load_main_config.cache_clear(); load_main_config();
