@@ -66,9 +66,8 @@ def create_config_if_not_exists(path: Path = CONFIG_FILE_PATH): # RENAMED functi
             save_config(DEFAULT_CONFIG, path)
             print(f"Default '{path.name}' created at {path}. Please review and update it as needed.")
 
-@lru_cache(maxsize=1)
 def load(path: Path = CONFIG_FILE_PATH) -> dict:
-    """Load and cache the TOML config. Ensures defaults are used if file is empty or malformed."""
+    """Load the TOML config. Ensures defaults are used if file is empty or malformed."""
     create_config_if_not_exists(path) # MODIFIED: Call renamed function
 
     try:
