@@ -397,7 +397,6 @@ if st.session_state.show_db_uploader:
                     shutil.move(temp_upload_path, DB_PATH) # Replace current DB
                     st.session_state.db_import_export_message = {"type": "success", "text": "Database imported successfully!"}
                      # Clear relevant caches or trigger re-initialization if needed
-                    if load_main_config: load_main_config.cache_clear() # Example: clear config cache
                     # Potentially re-initialize parts of the app or just rerun
                 else:
                     st.session_state.db_import_export_message = {"type": "error", "text": "DB_PATH not configured. Cannot save imported database."}
@@ -424,10 +423,6 @@ main_page_status_placeholder = st.empty() # Placeholder for spinner
 # Conditional execution of the scan in the main page area, with a spinner
 if st.session_state.get('scan_actively_processing_in_this_run', False):
     with main_page_status_placeholder.container(), st.spinner("🚀 Scanning for jobs... This may take a moment."):
-        if load_main_config:
-            try: load_main_config.cache_clear(); load_main_config();
-            except Exception as e: st.warning(f"Could not clear/reload config: {e}")
-        
         scan_outcome_message = ""
         natural_completion = False
 
@@ -532,4 +527,25 @@ if not st.session_state.get('scan_actively_processing_in_this_run', False):
                         st.rerun()
             
             st.markdown("---") # Separator after each job card
+
+# --------------------------- Config Reload Button ---------------------------------
+if st.button("🔄 Reload Configuration"):
+    try:
+        # if load_main_config: load_main_config.cache_clear() # Example: clear config cache
+        cfg = config.load() # Reload the config
+        st.toast("Configuration reloaded successfully!", icon="✅")
+        # Optional: Clear other caches or rerun parts of the app if needed
+    except Exception as e:
+        st.error(f"Failed to save settings: {e}")
+    finally:
+        # Clear caches etc after save
+        # try: load_main_config.cache_clear(); load_main_config();
+        pass # Keep pass to have a valid block if needed
+
+def main_dashboard(stop_scan_signal): # Ensure stop_scan_signal is passed
+    # Ensure this function definition is correctly indented (at the top level)
+    # ... rest of the function code ...
+    st.title("📋 JobFinder - Approved Jobs Dashboard") # Example line from the function
+    main_page_status_placeholder = st.empty() # Placeholder for spinner
+    # ... other lines ...
 

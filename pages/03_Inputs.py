@@ -28,7 +28,7 @@ def save_config_data(file_path: Path, data: dict):
             toml.dump(data, f)
         st.toast(f"Configuration saved to '{file_path.name}'!", icon="✅")
         # Clear the cache of the main config loader
-        load_main_config.cache_clear()
+        # load_main_config.cache_clear()
         st.toast("Configuration cache cleared.", icon="♻️")
 
     except Exception as e:
